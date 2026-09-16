@@ -1,0 +1,22 @@
+{
+  "name": "snackbar-checkout",
+  "private": true,
+  "workspaces": [
+    "packages/api",
+    "packages/gateway",
+    "packages/totem"
+  ],
+  "scripts": {
+    "dev": "trap 'kill 0' EXIT; npm run dev:gateway & npm run dev:api & npm run dev:totem",
+    "dev:api": "npm run dev --workspace @checkout/api",
+    "dev:totem": "npm run dev --workspace @checkout/totem",
+    "migrate": "npm run migrate --workspace @checkout/api",
+    "seed": "npm run seed --workspace @checkout/api",
+    "test": "npm test --workspace @checkout/api",
+    "typecheck": "npm run typecheck --workspace @checkout/api && npm run typecheck --workspace @checkout/gateway && npm run typecheck --workspace @checkout/totem",
+    "build": "npm run build --workspace @checkout/totem",
+    "dev:gateway": "npm run dev --workspace @checkout/gateway",
+    "scenario": "node scripts/scenario.mjs",
+    "dev:gateway-payments": "trap 'kill 0' EXIT; npm run dev:gateway & PAYMENT_DRIVER=http npm run dev:api & npm run dev:totem"
+  }
+}

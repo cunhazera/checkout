@@ -1,0 +1,10 @@
+node_modules/
+dist/
+build/
+.env
+.env.local
+*.log
+.DS_Store
+
+# design bundle archive — the extracted folder is what's tracked
+Self-checkout totem design.zip

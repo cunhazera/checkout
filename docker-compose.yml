@@ -1,0 +1,44 @@
+services:
+  db:
+    image: postgres:18
+    container_name: checkout_db
+    environment:
+      POSTGRES_USER: checkout
+      POSTGRES_PASSWORD: checkout
+      POSTGRES_DB: checkout
+    ports:
+      - "5433:5432"
+    volumes:
+      # Postgres 18+ expects a single mount at /var/lib/postgresql (not /data),
+      # so pg_upgrade --link can work across a version bump.
+      - checkout_pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U checkout -d checkout"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Benchmark instance: throwaway, large synthetic dataset, separate port.
+  # Started only with `docker compose --profile bench up -d bench`.
+  bench:
+    image: postgres:18
+    container_name: checkout_bench
+    profiles: ["bench"]
+    environment:
+      POSTGRES_USER: checkout
+      POSTGRES_PASSWORD: checkout
+      POSTGRES_DB: checkout_bench
+    ports:
+      - "5434:5432"
+    # No volume on purpose - this database is disposable.
+    command: >
+      postgres -c shared_buffers=256MB -c work_mem=16MB
+               -c track_io_timing=on -c log_min_duration_statement=200
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U checkout -d checkout_bench"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  checkout_pgdata:
