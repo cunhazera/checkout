@@ -12,11 +12,13 @@
     "dev:totem": "npm run dev --workspace @checkout/totem",
     "migrate": "npm run migrate --workspace @checkout/api",
     "seed": "npm run seed --workspace @checkout/api",
-    "test": "npm test --workspace @checkout/api",
+    "test": "npm run test:api && npm run test:totem",
     "typecheck": "npm run typecheck --workspace @checkout/api && npm run typecheck --workspace @checkout/gateway && npm run typecheck --workspace @checkout/totem",
     "build": "npm run build --workspace @checkout/totem",
     "dev:gateway": "npm run dev --workspace @checkout/gateway",
     "scenario": "node scripts/scenario.mjs",
-    "dev:gateway-payments": "trap 'kill 0' EXIT; npm run dev:gateway & PAYMENT_DRIVER=http npm run dev:api & npm run dev:totem"
+    "dev:gateway-payments": "trap 'kill 0' EXIT; npm run dev:gateway & PAYMENT_DRIVER=http npm run dev:api & npm run dev:totem",
+    "test:api": "npm test --workspace @checkout/api",
+    "test:totem": "npm test --workspace @checkout/totem"
   }
 }
