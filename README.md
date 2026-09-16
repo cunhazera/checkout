@@ -7,8 +7,9 @@ Built from an architecture reference for a single shop, then extended to run
 many stores from one application.
 
 <p align="center">
-  <img src="docs/screenshots/welcome.jpg" alt="Welcome screen" width="300">
-  <img src="docs/screenshots/shop.jpg" alt="Product grid" width="300">
+  <img src="docs/screenshots/front.png" alt="Welcome screen: the idle state a customer walks up to" width="330">
+  &nbsp;&nbsp;
+  <img src="docs/screenshots/menu.png" alt="Product grid, with one item sold out and the basket bar at the bottom" width="330">
 </p>
 
 ## What it does
