@@ -6,6 +6,7 @@ import { Review } from './screens/Review';
 import { Pay } from './screens/Pay';
 import { Done } from './screens/Done';
 import { ConfirmSheet } from './components/ConfirmSheet';
+import { t } from './i18n';
 
 /** The design is authored at a fixed 1080x1920 panel and scaled to fit. */
 function useCanvasScale() {
@@ -103,12 +104,10 @@ export default function App() {
         {s.idlePrompt && (
           <div className="tp-overlay">
             <div className="tp-modal">
-              <h3 className="tp-modal-title">Are you still there?</h3>
-              <p className="tp-modal-body">
-                Your basket will be cleared shortly so the next person can use the totem.
-              </p>
+              <h3 className="tp-modal-title">{t('stillThere')}</h3>
+              <p className="tp-modal-body">{t('stillThereBody')}</p>
               <button type="button" className="btn btn-primary" onClick={a.touch}>
-                I&apos;m still here
+                {t('imStillHere')}
               </button>
             </div>
           </div>

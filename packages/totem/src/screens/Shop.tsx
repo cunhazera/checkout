@@ -1,6 +1,7 @@
 import type { MenuItem } from '../api/types';
 import { formatCents } from '../money';
 import { Art } from '../components/Art';
+import { itemCountLabel, t } from '../i18n';
 
 interface Props {
   menu: MenuItem[];
@@ -32,14 +33,14 @@ export function Shop({
   return (
     <div className="tp-screen">
       <div className="tp-head">
-        <h2 className="tp-h2">Add your items</h2>
+        <h2 className="tp-h2">{t('addYourItems')}</h2>
         <button type="button" className="btn btn-ghost" onClick={onEmpty} disabled={itemCount === 0}>
-          Empty basket
+          {t('emptyBasket')}
         </button>
       </div>
 
       <div className="tp-subrow">
-        <span>Tap a product, confirm the quantity, then pay.</span>
+        <span>{t('shopHint')}</span>
         <span className="tp-status">{status}</span>
       </div>
 
@@ -71,12 +72,12 @@ export function Shop({
                   }`}
                 >
                   {item.outOfStock
-                    ? 'Sold out'
+                    ? t('badgeSoldOut')
                     : inCart > 0
-                      ? `${inCart} in basket`
+                      ? t('badgeInBasket', { n: inCart })
                       : soldOut
-                        ? 'All in basket'
-                        : 'Add'}
+                        ? t('badgeAllInBasket')
+                        : t('badgeAdd')}
                 </span>
               </div>
             </button>
@@ -86,9 +87,7 @@ export function Shop({
 
       <div className="tp-bar">
         <div>
-          <div className="tp-bar-count">
-            {itemCount === 1 ? '1 item' : `${itemCount} items`}
-          </div>
+          <div className="tp-bar-count">{itemCountLabel(itemCount)}</div>
           <div className="tp-bar-total">{formatCents(totalCents)}</div>
         </div>
         <button
@@ -97,7 +96,7 @@ export function Shop({
           onClick={onReview}
           disabled={itemCount === 0 || busy}
         >
-          Review &amp; pay
+          {t('reviewAndPay')}
         </button>
       </div>
     </div>

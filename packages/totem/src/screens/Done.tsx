@@ -1,5 +1,6 @@
 import type { Result } from '../state/session';
 import { formatCents } from '../money';
+import { t } from '../i18n';
 
 interface Props {
   result: Result;
@@ -24,14 +25,13 @@ export function Done({
   // ADR-003: an unknown outcome must never claim the card was not charged.
   const unknown = result === 'unknown';
 
-  const title = success ? 'Paid. Enjoy.' : unknown ? 'Please contact staff' : 'Payment declined';
+  const title = success ? t('paidEnjoy') : unknown ? t('contactStaff') : t('declined');
 
   const body = success
-    ? 'Payment went through. Take your items with you.'
+    ? t('paidBody')
     : unknown
-      ? 'We could not confirm your payment. Do not try again — staff will check whether it went through.'
-      : (failureMessage ??
-        'The payment was not accepted. Nothing was charged. Try again or choose another payment method.');
+      ? t('unknownBody')
+      : (failureMessage ?? t('declinedBody'));
 
   return (
     <div className="tp-screen tp-done">
@@ -45,7 +45,7 @@ export function Done({
       <p className="tp-done-body">{body}</p>
 
       {unknown && supportReference && (
-        <div className="tp-notice tp-notice-bad">Reference {supportReference}</div>
+        <div className="tp-notice tp-notice-bad">{t('reference', { ref: supportReference })}</div>
       )}
 
       {success && (
@@ -57,11 +57,14 @@ export function Done({
             </svg>
           </div>
           <div className="tp-receipt-info">
-            <div className="tp-receipt-title">Receipt on your phone</div>
-            <div className="tp-receipt-note">Scan this code to open it. Nothing is printed.</div>
+            <div className="tp-receipt-title">{t('receiptTitle')}</div>
+            <div className="tp-receipt-note">{t('receiptNote')}</div>
             {orderId && (
               <div className="tp-receipt-ref">
-                Order {orderId.slice(0, 8).toUpperCase()} · {formatCents(amountCents)}
+                {t('orderLine', {
+                  code: orderId.slice(0, 8).toUpperCase(),
+                  total: formatCents(amountCents),
+                })}
               </div>
             )}
           </div>
@@ -71,16 +74,16 @@ export function Done({
       <div className="tp-done-actions">
         {result === 'declined' && (
           <button type="button" className="btn btn-primary" onClick={onRetry}>
-            Try payment again
+            {t('tryAgain')}
           </button>
         )}
         <button type="button" className="btn btn-secondary" onClick={onFinish}>
-          {success ? 'Done' : 'Cancel order'}
+          {success ? t('done') : t('cancelOrder')}
         </button>
       </div>
 
       {success && (
-        <div className="tp-returning">Returning to the start screen in a few seconds.</div>
+        <div className="tp-returning">{t('returningSoon')}</div>
       )}
     </div>
   );

@@ -37,13 +37,16 @@ export const createOrderBody = {
     items: {
       type: 'array',
       minItems: 1,
+      // A cap the biggest real basket will never reach. Without one, a single
+      // request could take thousands of row locks in one transaction.
+      maxItems: 50,
       items: {
         type: 'object',
         required: ['itemId', 'quantity'],
         additionalProperties: false,
         properties: {
           itemId: uuid,
-          quantity: { type: 'integer', minimum: 1 },
+          quantity: { type: 'integer', minimum: 1, maximum: 99 },
         },
       },
     },

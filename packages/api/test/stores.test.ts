@@ -47,6 +47,29 @@ describe('store isolation', () => {
     expect(br).toMatchObject({ currency: 'BRL', totalCents: 1290 });
   });
 
+  it('records the currency on the order, not read live from the store', async () => {
+    // A store that ever changed currency must not rewrite what past customers
+    // were charged in.
+    const br = await placeOrder([{ itemId: ITEM.chips, quantity: 1 }], {
+      store: STORE.br,
+      totem: TOTEM.br,
+    });
+    await pool.query(`UPDATE stores SET currency = 'USD' WHERE id = $1`, [STORE.br]);
+
+    expect((await getOrder(STORE.br, br.id)).currency).toBe('BRL');
+  });
+
+  it('refuses an order that would cost nothing', async () => {
+    await pool.query(`UPDATE store_items SET price_cents = 0 WHERE store_id = $1 AND item_id = $2`, [
+      STORE.main,
+      ITEM.chips,
+    ]);
+    await expect(placeOrder([{ itemId: ITEM.chips, quantity: 1 }])).rejects.toMatchObject({
+      code: 'bad_request',
+    });
+    expect((await getStock(ITEM.chips)).reserved).toBe(0);
+  });
+
   it('keeps stock separate: a sale in one store leaves the other untouched', async () => {
     await placeOrder([{ itemId: ITEM.chips, quantity: 3 }]);
 

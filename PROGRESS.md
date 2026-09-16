@@ -63,6 +63,11 @@ routes is in `DISTRIBUTED_ARCHITECTURE.md`.
 
 ### Frontend (`packages/totem`)
 
+Tests: `src/money.test.ts`, `src/i18n.test.ts`, `src/state/session.test.tsx`
+(22 in total) — cart maths, tax estimate, the sold-out 409 path, decline and
+unknown payments, session reset, and translation.
+
+
 | File | Purpose |
 |---|---|
 | `src/api/client.ts` | Typed fetch client; `ApiError` carries the server's `code` |
@@ -487,3 +492,24 @@ The totem is unaffected: Vite compiles it, Node never runs it.
 - Reviewed `pool.ts` for the multi-store scale; see "Connection pool review".
   Six fixes, 8 new tests (122 total), two of them verified to fail against the
   old behaviour.
+
+### 2026-09-15 — project review follow-ups
+- **Committed.** The repository had no commits at all; everything now tracked.
+- **The totem was run and walked end to end in a browser** for the first time:
+  welcome, grid, confirm sheet, basket, pay, result. It matches the design, and
+  the only console error came from a browser extension, not the app.
+- **22 frontend tests added** (there were none), covering cart maths, the
+  sold-out reconciliation, decline/unknown payments and session reset.
+- Four defects from the review fixed:
+  1. `orders.currency` is now snapshotted, not read live from the store.
+  2. Orders are capped at 50 lines and 99 per line — an unbounded list would
+     take unbounded row locks in one transaction.
+  3. An order that would cost nothing is refused, rather than sending a
+     zero-amount charge a processor would reject.
+  4. **Screen copy now follows the store's locale** (`src/i18n.ts`, en + pt-BR).
+     A São Paulo totem said "Your basket" above "R$ 12,90"; verified in the
+     browser that it now reads Portuguese throughout. Product names still come
+     from the single-language catalog — that remains a Phase 4 item.
+- **CI added** (`.github/workflows/ci.yml`): typecheck, API tests against a real
+  Postgres service, totem tests, totem build.
+- 148 tests in total (126 API + 22 totem).

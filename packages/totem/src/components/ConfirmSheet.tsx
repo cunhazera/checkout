@@ -2,6 +2,7 @@ import type { MenuItem } from '../api/types';
 import { formatCents } from '../money';
 import { Art } from './Art';
 import { Stepper } from './Stepper';
+import { t } from '../i18n';
 
 interface Props {
   item: MenuItem;
@@ -41,24 +42,22 @@ export function ConfirmSheet({
         </div>
 
         <div className="tp-qty">
-          <span className="tp-qty-label">How many?</span>
+          <span className="tp-qty-label">{t('howMany')}</span>
           <Stepper value={quantity} onChange={onQuantity} min={1} max={remaining} />
         </div>
 
         {quantity >= remaining && (
           <div className="tp-notice">
-            {remaining === 1
-              ? 'This is the last one in stock.'
-              : `Only ${remaining} left in stock.`}
+            {remaining === 1 ? t('lastOneInStock') : t('onlyNLeft', { n: remaining })}
           </div>
         )}
 
         <div className="tp-sheet-actions">
           <button type="button" className="btn btn-secondary" onClick={onCancel}>
-            Cancel
+            {t('cancel')}
           </button>
           <button type="button" className="btn btn-primary" onClick={onConfirm}>
-            Add {formatCents(lineTotal)} to basket
+            {t('addToBasket', { total: formatCents(lineTotal) })}
           </button>
         </div>
       </div>

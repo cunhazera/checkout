@@ -116,6 +116,20 @@ describe('request schemas', () => {
     expect(res.json().error).toBe('validation_error');
   });
 
+  it('caps how many lines one order may contain', async () => {
+    // Each line takes a row lock; an unbounded list is an easy way to hurt a
+    // shard once this API is reachable from outside the machine.
+    const many = Array.from({ length: 51 }, () => ({ itemId: ITEM.chips, quantity: 1 }));
+    const res = await order(valid(many));
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe('validation_error');
+  });
+
+  it('caps the quantity of a single line', async () => {
+    const res = await order(valid([{ itemId: ITEM.chips, quantity: 100 }]));
+    expect(res.statusCode).toBe(400);
+  });
+
   it('drops unknown fields instead of passing them on', async () => {
     const res = await order({
       ...valid([{ itemId: ITEM.chips, quantity: 1, priceCents: 1 }]),

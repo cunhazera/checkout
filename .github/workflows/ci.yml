@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      # The API tests run against a real Postgres on purpose: row locks,
+      # SERIALIZABLE retries and FOR UPDATE SKIP LOCKED cannot be tested
+      # against a fake.
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: checkout
+          POSTGRES_PASSWORD: checkout
+          POSTGRES_DB: checkout
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U checkout -d checkout"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgres://checkout:checkout@localhost:5432/checkout
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # --env-file-if-exists needs 22.9+; type stripping would need 22.18.
+          node-version: '22.x'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck every package
+        run: npm run typecheck
+
+      - name: Apply the schema
+        run: npm run migrate
+
+      - name: API tests
+        # Includes concurrency, crash recovery and pool behaviour, so it needs
+        # the database above rather than a mock.
+        run: npm test --workspace @checkout/api
+
+      - name: Totem tests
+        run: npm test --workspace @checkout/totem
+
+      - name: Totem production build
+        run: npm run build --workspace @checkout/totem

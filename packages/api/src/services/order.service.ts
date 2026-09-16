@@ -110,12 +110,26 @@ export async function createOrder(storeId: string, input: CreateOrderInput): Pro
     const tax = taxOn(subtotal, store.taxBasisPoints);
     const total = addCents(subtotal, tax);
 
+    // Processors reject zero-amount charges, so an order that costs nothing
+    // would fail at the gateway with a confusing error. Revisit if free items
+    // (a promotion, a loyalty reward) ever become a thing.
+    if (total <= 0) throw badRequest('An order must cost something', { totalCents: total });
+
     const { rows } = await db.query<{ id: string; created_at: Date; expires_at: Date }>(
-      `INSERT INTO orders (store_id, totem_id, session_id, status,
+      `INSERT INTO orders (store_id, totem_id, session_id, status, currency,
                            subtotal_cents, tax_cents, total_cents, expires_at)
-       VALUES ($1, $2, $3, 'pending', $4, $5, $6, NOW() + ($7 || ' minutes')::interval)
+       VALUES ($1, $2, $3, 'pending', $4, $5, $6, $7, NOW() + ($8 || ' minutes')::interval)
        RETURNING id, created_at, expires_at`,
-      [storeId, input.totemId, input.sessionId, subtotal, tax, total, String(config.orderTtlMinutes)],
+      [
+        storeId,
+        input.totemId,
+        input.sessionId,
+        store.currency,
+        subtotal,
+        tax,
+        total,
+        String(config.orderTtlMinutes),
+      ],
     );
     const created = rows[0]!;
 
@@ -176,10 +190,9 @@ export async function getOrder(
     created_at: Date;
     expires_at: Date;
   }>(
-    `SELECT o.id, o.store_id, o.totem_id, o.session_id, o.status, st.currency,
+    `SELECT o.id, o.store_id, o.totem_id, o.session_id, o.status, o.currency,
             o.subtotal_cents, o.tax_cents, o.total_cents, o.created_at, o.expires_at
        FROM orders o
-       JOIN stores st ON st.id = o.store_id
       WHERE o.store_id = $1 AND o.id = $2`,
     [storeId, orderId],
   );

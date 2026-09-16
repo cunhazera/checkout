@@ -112,6 +112,9 @@ CREATE TABLE orders (
     totem_id       UUID         NOT NULL,
     session_id     VARCHAR(255) NOT NULL,           -- anonymous totem session
     status         VARCHAR(20)  NOT NULL DEFAULT 'pending',
+    -- Snapshotted like the prices are: if a store ever changes currency, an old
+    -- order must still read in the currency it was actually charged in.
+    currency       CHAR(3)      NOT NULL,
     subtotal_cents BIGINT       NOT NULL DEFAULT 0,
     tax_cents      BIGINT       NOT NULL DEFAULT 0,
     total_cents    BIGINT       NOT NULL,

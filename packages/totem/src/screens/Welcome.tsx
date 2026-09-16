@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 export function Welcome({ onStart }: { onStart: () => void }) {
   return (
     <div className="tp-screen tp-welcome" onClick={onStart}>
@@ -11,11 +12,9 @@ export function Welcome({ onStart }: { onStart: () => void }) {
       />
 
       <div className="tp-welcome-top">
-        <span className="tag tag-accent-2">Self-checkout</span>
+        <span className="tag tag-accent-2">{t('selfCheckout')}</span>
         <h1 className="tp-h1">Snack Bar</h1>
-        <p className="tp-lede">
-          Pick your items on screen, then pay by card or phone. No account needed.
-        </p>
+        <p className="tp-lede">{t('welcomeLede')}</p>
       </div>
 
       <div className="tp-welcome-bottom">
@@ -29,12 +28,12 @@ export function Welcome({ onStart }: { onStart: () => void }) {
               <path d="M17 9.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-2a6 6 0 0 1-6-6v-3.5a1.5 1.5 0 0 1 3 0" />
             </svg>
           </div>
-          <span className="tp-touch-label">Touch to start</span>
+          <span className="tp-touch-label">{t('touchToStart')}</span>
         </div>
         <div className="tp-methods">
-          <span>Card tap</span>
-          <span>Apple &amp; Google Pay</span>
-          <span>QR payment</span>
+          <span>{t('payCardTap')}</span>
+          <span>{t('payWallets')}</span>
+          <span>{t('payQr')}</span>
         </div>
       </div>
     </div>

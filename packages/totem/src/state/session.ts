@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiError } from '../api/client';
 import type { MenuItem, Order, PaymentMethod, Store } from '../api/types';
 import { configureMoney, estimateTax } from '../money';
+import { configureLanguage, t } from '../i18n';
 
 export type Screen = 'welcome' | 'shop' | 'review' | 'pay' | 'done';
 export type Result = 'approved' | 'declined' | 'unknown' | null;
@@ -46,7 +47,7 @@ export function useSession() {
       setMenu(await api.getMenu());
       setMenuError(null);
     } catch (err) {
-      setMenuError(err instanceof ApiError ? err.message : 'Menu unavailable');
+      setMenuError(err instanceof ApiError ? err.message : t('menuUnavailable'));
     }
   }, []);
 
@@ -56,6 +57,8 @@ export function useSession() {
       .then((st) => {
         setStore(st);
         configureMoney({ currency: st.currency, locale: st.locale });
+        // Words and money come from the same place: the store's locale.
+        configureLanguage(st.locale);
       })
       .catch(() => {
         /* fall back to the built-in USD default */
@@ -129,7 +132,7 @@ export function useSession() {
       setScreen('shop');
       void refreshMenu();
     } catch {
-      setMenuError('Cannot start a session. Please ask staff for help.');
+      setMenuError(t('cannotStart'));
     }
   }, [refreshMenu]);
 
@@ -150,7 +153,7 @@ export function useSession() {
     const item = byId.get(pendingId);
     if (!item) return;
     setCart((c) => ({ ...c, [pendingId]: (c[pendingId] ?? 0) + pendingQty }));
-    setStatus(`${item.name} added`);
+    setStatus(t('itemAdded', { name: item.name }));
     closeConfirm();
   }, [pendingId, pendingQty, byId, closeConfirm]);
 
@@ -165,7 +168,7 @@ export function useSession() {
 
   const emptyCart = useCallback(() => {
     setCart({});
-    setStatus('Basket emptied.');
+    setStatus(t('basketEmptied'));
   }, []);
 
   // --- order + payment -----------------------------------------------------
@@ -194,14 +197,12 @@ export function useSession() {
       if (err instanceof ApiError && err.code === 'item_out_of_stock' && err.itemId) {
         const name = err.itemName ?? 'That item';
         setQuantity(err.itemId, 0);
-        setFailureMessage(`${name} just sold out and was removed from your order.`);
-        setStatus(`${name} sold out`);
+        setFailureMessage(t('soldOutRemoved', { name }));
+        setStatus(t('itemSoldOutStatus', { name }));
         await refreshMenu();
         setScreen('review');
       } else {
-        setFailureMessage(
-          err instanceof ApiError ? err.message : 'Could not start your order. Please try again.',
-        );
+        setFailureMessage(err instanceof ApiError ? err.message : t('couldNotStartOrder'));
       }
     } finally {
       setBusy(false);
@@ -219,7 +220,7 @@ export function useSession() {
         setResult('approved');
       } else if (res.status === 'failed') {
         setResult('declined');
-        setFailureMessage('The payment was not accepted. Nothing was charged.');
+        setFailureMessage(t('nothingWasCharged'));
         // Stock was released server-side, so the old order is dead. A retry
         // re-reserves from the cart, which is still intact.
         setOrder(null);
@@ -232,13 +233,11 @@ export function useSession() {
     } catch (err) {
       if (err instanceof ApiError && err.code === 'order_expired') {
         setResult('declined');
-        setFailureMessage('Your session timed out and the order was released.');
+        setFailureMessage(t('sessionTimedOut'));
         setOrder(null);
         setScreen('done');
       } else {
-        setFailureMessage(
-          err instanceof ApiError ? err.message : 'Payment could not be completed.',
-        );
+        setFailureMessage(err instanceof ApiError ? err.message : t('couldNotPay'));
       }
     } finally {
       setBusy(false);
