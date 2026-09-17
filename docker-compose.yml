@@ -1,7 +1,9 @@
 services:
   db:
     image: postgres:18
-    container_name: checkout_db
+    # No container_name on purpose: compose derives one from the directory, so
+    # a second checkout (a worktree, a colleague's clone) gets its own container
+    # instead of colliding with this one.
     environment:
       POSTGRES_USER: checkout
       POSTGRES_PASSWORD: checkout
@@ -22,7 +24,6 @@ services:
   # Started only with `docker compose --profile bench up -d bench`.
   bench:
     image: postgres:18
-    container_name: checkout_bench
     profiles: ["bench"]
     environment:
       POSTGRES_USER: checkout

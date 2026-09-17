@@ -82,7 +82,7 @@ panel and scales to fit, so a tall narrow window looks like the real thing.
 |---|---|
 | `npm run dev` | Everything, with the in-process fake payment terminal |
 | `npm run dev:gateway-payments` | Everything, with payments going over HTTP to the mock gateway |
-| `npm test` | All 148 tests (API + totem) |
+| `npm test` | All 161 tests (API + totem) |
 | `npm run typecheck` | All three packages |
 | `npm run build` | Production build of the totem |
 | `npm run seed` | Reset the demo data |
@@ -146,8 +146,8 @@ valid file shows an out-of-service screen rather than guessing a store.
 
 ```bash
 npm test              # everything
-npm run test:api      # 126 tests, needs Postgres running
-npm run test:totem    # 22 tests, no database needed
+npm run test:api      # 128 tests, needs Postgres running
+npm run test:totem    # 33 tests, no database needed
 ```
 
 The API tests run against a **real Postgres**, not a mock, because the things
