@@ -4,7 +4,7 @@ import { buildApp } from '../src/app.js';
 import { closePool } from '../src/db/pool.js';
 import { setTerminal } from '../src/services/payment.service.js';
 import { FakeTerminal } from '../src/ports/fake-terminal.js';
-import { ITEM, STORE, TOTEM, getStock, resetDatabase, setupDatabase } from './helpers.js';
+import { PRODUCT, STORE, TOTEM, getStock, resetDatabase, setupDatabase } from './helpers.js';
 
 let app: FastifyInstance;
 const base = `/v1/stores/${STORE.main}`;
@@ -23,7 +23,7 @@ afterAll(async () => {
 const order = (body: unknown) =>
   app.inject({ method: 'POST', url: `${base}/orders`, payload: body as object });
 
-const valid = (items: unknown = [{ itemId: ITEM.chips, quantity: 1 }]) => ({
+const valid = (items: unknown = [{ productId: PRODUCT.chips, quantity: 1 }]) => ({
   sessionId: 's',
   totemId: TOTEM.main,
   items,
@@ -74,8 +74,8 @@ describe('request schemas', () => {
     }
   });
 
-  it('rejects a non-UUID itemId without reserving anything', async () => {
-    const res = await order(valid([{ itemId: 'abc', quantity: 1 }]));
+  it('rejects a non-UUID productId without reserving anything', async () => {
+    const res = await order(valid([{ productId: 'abc', quantity: 1 }]));
     expect(res.statusCode).toBe(400);
     expect(res.json().error).toBe('validation_error');
   });
@@ -90,11 +90,11 @@ describe('request schemas', () => {
   it('rejects a sessionId longer than the column', async () => {
     const res = await order({ ...valid(), sessionId: 'x'.repeat(256) });
     expect(res.statusCode).toBe(400);
-    expect((await getStock(ITEM.chips)).reserved).toBe(0);
+    expect((await getStock(PRODUCT.chips)).reserved).toBe(0);
   });
 
   it('does not coerce a string quantity', async () => {
-    const res = await order(valid([{ itemId: ITEM.chips, quantity: '2' }]));
+    const res = await order(valid([{ productId: PRODUCT.chips, quantity: '2' }]));
     expect(res.statusCode).toBe(400);
   });
 
@@ -119,20 +119,20 @@ describe('request schemas', () => {
   it('caps how many lines one order may contain', async () => {
     // Each line takes a row lock; an unbounded list is an easy way to hurt a
     // shard once this API is reachable from outside the machine.
-    const many = Array.from({ length: 51 }, () => ({ itemId: ITEM.chips, quantity: 1 }));
+    const many = Array.from({ length: 51 }, () => ({ productId: PRODUCT.chips, quantity: 1 }));
     const res = await order(valid(many));
     expect(res.statusCode).toBe(400);
     expect(res.json().error).toBe('validation_error');
   });
 
   it('caps the quantity of a single line', async () => {
-    const res = await order(valid([{ itemId: ITEM.chips, quantity: 100 }]));
+    const res = await order(valid([{ productId: PRODUCT.chips, quantity: 100 }]));
     expect(res.statusCode).toBe(400);
   });
 
   it('drops unknown fields instead of passing them on', async () => {
     const res = await order({
-      ...valid([{ itemId: ITEM.chips, quantity: 1, priceCents: 1 }]),
+      ...valid([{ productId: PRODUCT.chips, quantity: 1, priceCents: 1 }]),
       totalCents: 1,
       storeId: STORE.br,
     });
@@ -144,7 +144,7 @@ describe('request schemas', () => {
 // The empty-body special case must not weaken JSON parsing.
 describe('JSON body parsing', () => {
   const poisoned = (key: string) =>
-    `{${key},"sessionId":"s","totemId":"${TOTEM.main}","items":[{"itemId":"${ITEM.chips}","quantity":1}]}`;
+    `{${key},"sessionId":"s","totemId":"${TOTEM.main}","items":[{"productId":"${PRODUCT.chips}","quantity":1}]}`;
 
   it('rejects prototype poisoning', async () => {
     const res = await app.inject({
@@ -156,7 +156,7 @@ describe('JSON body parsing', () => {
     });
     expect(res.statusCode).toBe(400);
     expect(res.json().error).toBe('bad_request');
-    expect((await getStock(ITEM.chips)).reserved).toBe(0);
+    expect((await getStock(PRODUCT.chips)).reserved).toBe(0);
   });
 
   it('rejects constructor.prototype poisoning', async () => {
@@ -167,6 +167,6 @@ describe('JSON body parsing', () => {
       payload: poisoned('"constructor":{"prototype":{"polluted":true}}'),
     });
     expect(res.statusCode).toBe(400);
-    expect((await getStock(ITEM.chips)).reserved).toBe(0);
+    expect((await getStock(PRODUCT.chips)).reserved).toBe(0);
   });
 });

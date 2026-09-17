@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiError } from '../api/client';
-import type { MenuItem, Order, PaymentMethod, Store } from '../api/types';
+import type { Order, PaymentMethod, Product, Store } from '../api/types';
 import { configureMoney, estimateTax } from '../money';
 import { configureLanguage, t } from '../i18n';
 
@@ -8,7 +8,7 @@ export type Screen = 'welcome' | 'shop' | 'review' | 'pay' | 'done';
 export type Result = 'approved' | 'declined' | 'unknown' | null;
 
 export interface CartLine {
-  item: MenuItem;
+  product: Product;
   quantity: number;
 }
 
@@ -21,7 +21,7 @@ const MENU_POLL_MS = 10_000;
 export function useSession() {
   const [screen, setScreen] = useState<Screen>('welcome');
   const [store, setStore] = useState<Store | null>(null);
-  const [menu, setMenu] = useState<MenuItem[]>([]);
+  const [menu, setMenu] = useState<Product[]>([]);
   const [menuError, setMenuError] = useState<string | null>(null);
 
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -80,15 +80,15 @@ export function useSession() {
     () =>
       Object.entries(cart)
         .map(([id, quantity]) => {
-          const item = byId.get(id);
-          return item ? { item, quantity } : null;
+          const product = byId.get(id);
+          return product ? { product, quantity } : null;
         })
         .filter((l): l is CartLine => l !== null),
     [cart, byId],
   );
 
   const itemCount = lines.reduce((n, l) => n + l.quantity, 0);
-  const subtotalCents = lines.reduce((n, l) => n + l.item.priceCents * l.quantity, 0);
+  const subtotalCents = lines.reduce((n, l) => n + l.product.priceCents * l.quantity, 0);
   const taxCents = estimateTax(subtotalCents, store?.taxBasisPoints ?? 0);
   const totalCents = subtotalCents + taxCents;
 
@@ -138,8 +138,8 @@ export function useSession() {
 
   // --- cart ----------------------------------------------------------------
 
-  const openConfirm = useCallback((itemId: string) => {
-    setPendingId(itemId);
+  const openConfirm = useCallback((productId: string) => {
+    setPendingId(productId);
     setPendingQty(1);
   }, []);
 
@@ -150,18 +150,18 @@ export function useSession() {
 
   const confirmAdd = useCallback(() => {
     if (!pendingId) return;
-    const item = byId.get(pendingId);
-    if (!item) return;
+    const product = byId.get(pendingId);
+    if (!product) return;
     setCart((c) => ({ ...c, [pendingId]: (c[pendingId] ?? 0) + pendingQty }));
-    setStatus(t('itemAdded', { name: item.name }));
+    setStatus(t('itemAdded', { name: product.name }));
     closeConfirm();
   }, [pendingId, pendingQty, byId, closeConfirm]);
 
-  const setQuantity = useCallback((itemId: string, quantity: number) => {
+  const setQuantity = useCallback((productId: string, quantity: number) => {
     setCart((c) => {
       const next = { ...c };
-      if (quantity <= 0) delete next[itemId];
-      else next[itemId] = quantity;
+      if (quantity <= 0) delete next[productId];
+      else next[productId] = quantity;
       return next;
     });
   }, []);
@@ -189,14 +189,14 @@ export function useSession() {
     try {
       const created = await api.createOrder(
         sessionId,
-        lines.map((l) => ({ itemId: l.item.id, quantity: l.quantity })),
+        lines.map((l) => ({ productId: l.product.id, quantity: l.quantity })),
       );
       setOrder(created);
       setScreen('pay');
     } catch (err) {
-      if (err instanceof ApiError && err.code === 'item_out_of_stock' && err.itemId) {
-        const name = err.itemName ?? 'That item';
-        setQuantity(err.itemId, 0);
+      if (err instanceof ApiError && err.code === 'product_out_of_stock' && err.productId) {
+        const name = err.productName ?? 'That product';
+        setQuantity(err.productId, 0);
         setFailureMessage(t('soldOutRemoved', { name }));
         setStatus(t('itemSoldOutStatus', { name }));
         await refreshMenu();

@@ -4,7 +4,7 @@ import { buildApp } from '../src/app.js';
 import { closePool } from '../src/db/pool.js';
 import { setTerminal } from '../src/services/payment.service.js';
 import { FakeTerminal } from '../src/ports/fake-terminal.js';
-import { ITEM, STORE, TOTEM, resetDatabase, setupDatabase } from './helpers.js';
+import { PRODUCT, STORE, TOTEM, resetDatabase, setupDatabase } from './helpers.js';
 
 let app: FastifyInstance;
 const terminal = new FakeTerminal('approve');
@@ -24,7 +24,7 @@ afterAll(async () => {
   await closePool();
 });
 
-const createOrder = async (items: { itemId: string; quantity: number }[], storeBase = base, totemId: string = TOTEM.main) => {
+const createOrder = async (items: { productId: string; quantity: number }[], storeBase = base, totemId: string = TOTEM.main) => {
   const session = (await app.inject({ method: 'POST', url: `${storeBase}/sessions` })).json();
   return app.inject({
     method: 'POST',
@@ -76,7 +76,7 @@ describe('HTTP surface', () => {
   });
 
   it('runs the full happy path: session -> order -> payment', async () => {
-    const created = await createOrder([{ itemId: ITEM.chips, quantity: 2 }]);
+    const created = await createOrder([{ productId: PRODUCT.chips, quantity: 2 }]);
     expect(created.statusCode).toBe(201);
     const order = created.json();
     expect(order).toMatchObject({ storeId: STORE.main, totemId: TOTEM.main, currency: 'USD', totalCents: 480 });
@@ -95,16 +95,16 @@ describe('HTTP surface', () => {
 
   it('returns 201 for a declined payment too — the attempt was created', async () => {
     terminal.setMode('decline');
-    const order = (await createOrder([{ itemId: ITEM.chips, quantity: 1 }])).json();
+    const order = (await createOrder([{ productId: PRODUCT.chips, quantity: 1 }])).json();
     const res = await app.inject({ method: 'POST', url: `${base}/orders/${order.id}/payments`, payload: {} });
     expect(res.statusCode).toBe(201);
     expect(res.json().status).toBe('failed');
   });
 
   it('returns 409 with a machine-readable code when an item is sold out', async () => {
-    const res = await createOrder([{ itemId: ITEM.coffee, quantity: 1 }]);
+    const res = await createOrder([{ productId: PRODUCT.coffee, quantity: 1 }]);
     expect(res.statusCode).toBe(409);
-    expect(res.json()).toMatchObject({ error: 'item_out_of_stock', itemId: ITEM.coffee });
+    expect(res.json()).toMatchObject({ error: 'product_out_of_stock', productId: PRODUCT.coffee });
   });
 
   it('returns 404 for an unknown order', async () => {
@@ -117,7 +117,7 @@ describe('HTTP surface', () => {
   });
 
   it('POST .../cancel releases stock and is idempotent', async () => {
-    const order = (await createOrder([{ itemId: ITEM.chips, quantity: 1 }])).json();
+    const order = (await createOrder([{ productId: PRODUCT.chips, quantity: 1 }])).json();
 
     const first = await app.inject({ method: 'POST', url: `${base}/orders/${order.id}/cancel` });
     expect(first.statusCode).toBe(200);

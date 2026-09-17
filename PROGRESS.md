@@ -31,7 +31,7 @@ _Last updated: 2026-09-13_
 | `src/db/migrate.ts` | Ordered `.sql` runner, tracked in `schema_migrations` |
 | `src/db/seed.ts` | Applies `seeds/menu.sql` |
 | `src/db/migrations/001_init.sql` | The whole schema: stores, catalog, per-store products, stock, orders, payments, indexes |
-| `src/services/menu.service.ts` | Menu query + 10s cache with write invalidation |
+| `src/services/menu.service.ts` | Menu query, read fresh every request (no cache) |
 | `src/services/stock.service.ts` | `SELECT FOR UPDATE` reserve / release / commit (ADR-004) |
 | `src/services/order.service.ts` | Session start, order creation, get, abandon |
 | `src/services/payment.service.ts` | Three-outcome payment state machine (ADR-003) |
@@ -513,3 +513,23 @@ The totem is unaffected: Vite compiles it, Node never runs it.
 - **CI added** (`.github/workflows/ci.yml`): typecheck, API tests against a real
   Postgres service, totem tests, totem build.
 - 148 tests in total (126 API + 22 totem).
+
+### 2026-09-17 — store-owned products
+Spec: `.claude/specs/store-owned-products.md`, from an interview after the
+premortem. Implemented in full.
+- `items` + `store_items` collapse into one **`products`** table keyed
+  `(store_id, id)`, holding name, description, image, price and `active`. There
+  is no shared catalog: a totem is filled from a local shelf, so each store owns
+  its rows, and a product id from another store does not resolve at all.
+- `products.active` is the only off switch and it is per store. The global
+  switch that could empty every menu in the country no longer exists — the
+  earlier mitigation (a rule forbidding it) is now unnecessary.
+- `stock` and `order_items` key off `product_id`; the API field is `productId`
+  and the error codes are `product_out_of_stock` / `product_unavailable`.
+- **The menu cache was removed.** Availability is read from the database on
+  every request, so it cannot go stale across API instances. The store settings
+  cache (30 s) stays: it never affects stock.
+- Seed now gives each store its own products — BR-SP-0001 sells Portuguese-named
+  products at BRL prices, not translations of the other store's rows.
+- 148 tests passing; verified end to end in the browser, including a store
+  rejecting another store's product id.

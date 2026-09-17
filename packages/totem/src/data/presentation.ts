@@ -74,11 +74,11 @@ const BY_ID: Record<string, Art> = {
 
 const PALETTES: ArtPalette[] = ['accent', 'sage', 'sand'];
 
-export function artFor(itemId: string): Art {
-  const known = BY_ID[itemId];
+export function artFor(productId: string): Art {
+  const known = BY_ID[productId];
   if (known) return known;
 
   let hash = 0;
-  for (const ch of itemId) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  for (const ch of productId) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
   return { palette: PALETTES[hash % PALETTES.length]!, ...GENERIC };
 }

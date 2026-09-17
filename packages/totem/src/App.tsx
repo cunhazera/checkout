@@ -92,7 +92,7 @@ export default function App() {
         {/* Overlay: the grid stays mounted underneath. */}
         {s.pending && (
           <ConfirmSheet
-            item={s.pending}
+            product={s.pending}
             quantity={s.pendingQty}
             alreadyInCart={s.cart[s.pending.id] ?? 0}
             onQuantity={a.setPendingQty}

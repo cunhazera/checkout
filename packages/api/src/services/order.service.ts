@@ -4,13 +4,12 @@ import { config } from '../config.js';
 import { badRequest, orderNotFound, totemNotFound } from '../errors.js';
 import { addCents, cents, multiplyCents, sumCents, taxOn, type Cents } from '../money.js';
 import { reserveStock, releaseReservations, type RequestedLine } from './stock.service.js';
-import { invalidateMenuCache } from './menu.service.js';
 import { getStore } from './store.service.js';
 
 export type OrderStatus = 'pending' | 'confirmed' | 'paid' | 'failed' | 'cancelled' | 'expired';
 
 export interface OrderLine {
-  itemId: string;
+  productId: string;
   name: string;
   quantity: number;
   unitPriceCents: Cents;
@@ -75,18 +74,20 @@ function validateInput(input: CreateOrderInput): void {
   }
   const seen = new Set<string>();
   for (const line of lines) {
-    if (typeof line?.itemId !== 'string' || line.itemId.length === 0) {
-      throw badRequest('Each line must carry an itemId');
+    if (typeof line?.productId !== 'string' || line.productId.length === 0) {
+      throw badRequest('Each line must carry a productId');
     }
     if (!Number.isInteger(line.quantity) || line.quantity < 1) {
-      throw badRequest('Each line quantity must be a positive integer', { itemId: line.itemId });
+      throw badRequest('Each line quantity must be a positive integer', {
+        productId: line.productId,
+      });
     }
-    if (seen.has(line.itemId)) {
-      // Two lines for the same item would take the same lock twice and double
-      // the reservation. The client should merge them into one quantity.
-      throw badRequest('Duplicate itemId in order', { itemId: line.itemId });
+    if (seen.has(line.productId)) {
+      // Two lines for the same product would take the same lock twice and
+      // double the reservation. The client merges them into one quantity.
+      throw badRequest('Duplicate productId in order', { productId: line.productId });
     }
-    seen.add(line.itemId);
+    seen.add(line.productId);
   }
 }
 
@@ -135,9 +136,9 @@ export async function createOrder(storeId: string, input: CreateOrderInput): Pro
 
     for (const line of priced) {
       await db.query(
-        `INSERT INTO order_items (store_id, order_id, item_id, quantity, unit_price_cents)
+        `INSERT INTO order_items (store_id, order_id, product_id, quantity, unit_price_cents)
          VALUES ($1, $2, $3, $4, $5)`,
-        [storeId, created.id, line.itemId, line.quantity, line.unitPriceCents],
+        [storeId, created.id, line.productId, line.quantity, line.unitPriceCents],
       );
     }
 
@@ -154,7 +155,7 @@ export async function createOrder(storeId: string, input: CreateOrderInput): Pro
       createdAt: created.created_at.toISOString(),
       expiresAt: created.expires_at.toISOString(),
       items: priced.map((p) => ({
-        itemId: p.itemId,
+        productId: p.productId,
         name: p.name,
         quantity: p.quantity,
         unitPriceCents: p.unitPriceCents,
@@ -163,8 +164,6 @@ export async function createOrder(storeId: string, input: CreateOrderInput): Pro
     };
   });
 
-  // Reserving changed this store's availability. Other stores are unaffected.
-  invalidateMenuCache(storeId);
   return order;
 }
 
@@ -200,16 +199,16 @@ export async function getOrder(
   if (!row) throw orderNotFound(orderId);
 
   const { rows: itemRows } = await db.query<{
-    item_id: string;
+    product_id: string;
     name: string;
     quantity: number;
     unit_price_cents: number;
   }>(
-    `SELECT oi.item_id, i.name, oi.quantity, oi.unit_price_cents
+    `SELECT oi.product_id, p.name, oi.quantity, oi.unit_price_cents
        FROM order_items oi
-       JOIN items i ON i.id = oi.item_id
+       JOIN products p ON p.store_id = oi.store_id AND p.id = oi.product_id
       WHERE oi.store_id = $1 AND oi.order_id = $2
-      ORDER BY i.name`,
+      ORDER BY p.name`,
     [storeId, orderId],
   );
 
@@ -226,7 +225,7 @@ export async function getOrder(
     createdAt: row.created_at.toISOString(),
     expiresAt: row.expires_at.toISOString(),
     items: itemRows.map((r) => ({
-      itemId: r.item_id,
+      productId: r.product_id,
       name: r.name,
       quantity: r.quantity,
       unitPriceCents: cents(r.unit_price_cents),
@@ -261,6 +260,5 @@ export async function cancelOrder(storeId: string, orderId: string): Promise<{ s
     return 'cancelled' as const;
   });
 
-  invalidateMenuCache(storeId);
   return { status };
 }

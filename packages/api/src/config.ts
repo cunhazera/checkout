@@ -51,7 +51,6 @@ export const config = {
   fakeTerminalMode: oneOf('FAKE_TERMINAL_MODE', FAKE_MODES, 'approve'),
   paymentPollIntervalMs: int('PAYMENT_POLL_INTERVAL_MS', 2_000),
   paymentPollTimeoutMs: int('PAYMENT_POLL_TIMEOUT_MS', 30_000),
-  menuCacheMs: int('MENU_CACHE_MS', 10_000),
 
   // --- database pool -------------------------------------------------------
   /**

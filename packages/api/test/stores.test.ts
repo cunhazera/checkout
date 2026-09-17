@@ -8,7 +8,8 @@ import { getMenu } from '../src/services/menu.service.js';
 import { runSessionCleanup } from '../src/jobs/session-cleanup.js';
 import { FakeTerminal } from '../src/ports/fake-terminal.js';
 import {
-  ITEM,
+  BR_PRODUCT,
+  PRODUCT,
   STORE,
   TOTEM,
   assertStockInvariant,
@@ -40,8 +41,11 @@ afterAll(async () => {
  */
 describe('store isolation', () => {
   it('prices an order in the store\'s own currency and price list', async () => {
-    const us = await placeOrder([{ itemId: ITEM.chips, quantity: 1 }]);
-    const br = await placeOrder([{ itemId: ITEM.chips, quantity: 1 }], { store: STORE.br, totem: TOTEM.br });
+    const us = await placeOrder([{ productId: PRODUCT.chips, quantity: 1 }]);
+    const br = await placeOrder([{ productId: BR_PRODUCT.chips, quantity: 1 }], {
+      store: STORE.br,
+      totem: TOTEM.br,
+    });
 
     expect(us).toMatchObject({ currency: 'USD', totalCents: 240 });
     expect(br).toMatchObject({ currency: 'BRL', totalCents: 1290 });
@@ -50,7 +54,7 @@ describe('store isolation', () => {
   it('records the currency on the order, not read live from the store', async () => {
     // A store that ever changed currency must not rewrite what past customers
     // were charged in.
-    const br = await placeOrder([{ itemId: ITEM.chips, quantity: 1 }], {
+    const br = await placeOrder([{ productId: BR_PRODUCT.chips, quantity: 1 }], {
       store: STORE.br,
       totem: TOTEM.br,
     });
@@ -60,31 +64,34 @@ describe('store isolation', () => {
   });
 
   it('refuses an order that would cost nothing', async () => {
-    await pool.query(`UPDATE store_items SET price_cents = 0 WHERE store_id = $1 AND item_id = $2`, [
+    await pool.query(`UPDATE products SET price_cents = 0 WHERE store_id = $1 AND id = $2`, [
       STORE.main,
-      ITEM.chips,
+      PRODUCT.chips,
     ]);
-    await expect(placeOrder([{ itemId: ITEM.chips, quantity: 1 }])).rejects.toMatchObject({
+    await expect(placeOrder([{ productId: PRODUCT.chips, quantity: 1 }])).rejects.toMatchObject({
       code: 'bad_request',
     });
-    expect((await getStock(ITEM.chips)).reserved).toBe(0);
+    expect((await getStock(PRODUCT.chips)).reserved).toBe(0);
   });
 
   it('keeps stock separate: a sale in one store leaves the other untouched', async () => {
-    await placeOrder([{ itemId: ITEM.chips, quantity: 3 }]);
+    await placeOrder([{ productId: PRODUCT.chips, quantity: 3 }]);
 
-    expect((await getStock(ITEM.chips, STORE.main)).reserved).toBe(3);
-    expect((await getStock(ITEM.chips, STORE.br)).reserved).toBe(0);
+    expect((await getStock(PRODUCT.chips, STORE.main)).reserved).toBe(3);
+    expect((await getStock(BR_PRODUCT.chips, STORE.br)).reserved).toBe(0);
     await assertStockInvariant();
   });
 
   it('lets two stores sell their own last unit at the same time', async () => {
-    await setStock(ITEM.sandwich, 1, 0, STORE.main);
-    await setStock(ITEM.sandwich, 1, 0, STORE.br);
+    await setStock(PRODUCT.sandwich, 1, 0, STORE.main);
+    await setStock(BR_PRODUCT.water, 1, 0, STORE.br);
 
     const results = await Promise.allSettled([
-      placeOrder([{ itemId: ITEM.sandwich, quantity: 1 }]),
-      placeOrder([{ itemId: ITEM.sandwich, quantity: 1 }], { store: STORE.br, totem: TOTEM.br }),
+      placeOrder([{ productId: PRODUCT.sandwich, quantity: 1 }]),
+      placeOrder([{ productId: BR_PRODUCT.water, quantity: 1 }], {
+        store: STORE.br,
+        totem: TOTEM.br,
+      }),
     ]);
 
     // Both succeed: the locks are on different rows, so they never contend.
@@ -92,11 +99,12 @@ describe('store isolation', () => {
     await assertStockInvariant();
   });
 
-  it('refuses an item outside the store\'s product range', async () => {
-    // BR-SP-0001 does not sell Iced coffee, even though it is in the catalog.
+  it('refuses another store\'s product id outright', async () => {
+    // Product ids belong to one store. BR-SP-0001 has no row with this id, so
+    // there is nothing to sell and nothing to reserve.
     await expect(
-      placeOrder([{ itemId: ITEM.coffee, quantity: 1 }], { store: STORE.br, totem: TOTEM.br }),
-    ).rejects.toMatchObject({ code: 'item_unavailable' });
+      placeOrder([{ productId: PRODUCT.coffee, quantity: 1 }], { store: STORE.br, totem: TOTEM.br }),
+    ).rejects.toMatchObject({ code: 'product_unavailable' });
   });
 
   it('shows each store only its own menu', async () => {
@@ -105,26 +113,29 @@ describe('store isolation', () => {
 
     expect(main).toHaveLength(9);
     expect(br).toHaveLength(8);
-    expect(br.find((i) => i.id === ITEM.coffee)).toBeUndefined();
-    expect(br.find((i) => i.id === ITEM.chips)!.priceCents).toBe(1290);
+    // Not one shared product in common: the two menus are different rows.
+    expect(main.some((p) => br.some((b) => b.id === p.id))).toBe(false);
+    expect(br.find((p) => p.id === BR_PRODUCT.chips)!.priceCents).toBe(1290);
+    expect(br.find((p) => p.id === BR_PRODUCT.chips)!.name).toBe('Batata frita');
   });
 
-  it('invalidates only the store whose stock changed', async () => {
-    const brBefore = await getMenu(STORE.br);
-    await placeOrder([{ itemId: ITEM.chips, quantity: 2 }]);
+  it('shows the sale immediately, and only in the store that made it', async () => {
+    // There is no menu cache: every read is current. A reservation must show up
+    // at once in its own store and not at all in the other.
+    const brBefore = (await getMenu(STORE.br)).find((p) => p.id === BR_PRODUCT.chips)!;
+    await placeOrder([{ productId: PRODUCT.chips, quantity: 2 }]);
 
     const mainAfter = await getMenu(STORE.main);
-    const brAfter = await getMenu(STORE.br);
+    const brAfter = (await getMenu(STORE.br)).find((p) => p.id === BR_PRODUCT.chips)!;
 
-    expect(mainAfter.find((i) => i.id === ITEM.chips)!.availableQuantity).toBe(22);
-    // The BR entry was never invalidated, so it is the same cached array.
-    expect(brAfter).toBe(brBefore);
+    expect(mainAfter.find((p) => p.id === PRODUCT.chips)!.availableQuantity).toBe(22);
+    expect(brAfter.availableQuantity).toBe(brBefore.availableQuantity);
   });
 });
 
 describe('store-scoped access', () => {
   it('cannot read another store\'s order by id', async () => {
-    const order = await placeOrder([{ itemId: ITEM.chips, quantity: 1 }]);
+    const order = await placeOrder([{ productId: PRODUCT.chips, quantity: 1 }]);
     await expect(getOrder(STORE.br, order.id)).rejects.toMatchObject({ code: 'order_not_found' });
 
     const res = await app.inject({ method: 'GET', url: `/v1/stores/${STORE.br}/orders/${order.id}` });
@@ -132,26 +143,26 @@ describe('store-scoped access', () => {
   });
 
   it('cannot pay or cancel another store\'s order', async () => {
-    const order = await placeOrder([{ itemId: ITEM.chips, quantity: 1 }]);
+    const order = await placeOrder([{ productId: PRODUCT.chips, quantity: 1 }]);
 
     await expect(payOrder(STORE.br, order.id, 'card')).rejects.toMatchObject({ code: 'order_not_found' });
     await expect(cancelOrder(STORE.br, order.id)).rejects.toMatchObject({ code: 'order_not_found' });
 
     // Still pending and still holding its stock in its own store.
     expect((await getOrder(STORE.main, order.id)).status).toBe('pending');
-    expect((await getStock(ITEM.chips)).reserved).toBe(1);
+    expect((await getStock(PRODUCT.chips)).reserved).toBe(1);
   });
 
   it('rejects a totem registered to a different store', async () => {
     await expect(
-      placeOrder([{ itemId: ITEM.chips, quantity: 1 }], { store: STORE.main, totem: TOTEM.br }),
+      placeOrder([{ productId: PRODUCT.chips, quantity: 1 }], { store: STORE.main, totem: TOTEM.br }),
     ).rejects.toMatchObject({ code: 'totem_not_found' });
-    expect((await getStock(ITEM.chips)).reserved).toBe(0);
+    expect((await getStock(PRODUCT.chips)).reserved).toBe(0);
   });
 
   it('accepts orders from any of the store\'s five totems', async () => {
-    const a = await placeOrder([{ itemId: ITEM.chips, quantity: 1 }], { totem: TOTEM.main });
-    const b = await placeOrder([{ itemId: ITEM.chips, quantity: 1 }], { totem: TOTEM.main2 });
+    const a = await placeOrder([{ productId: PRODUCT.chips, quantity: 1 }], { totem: TOTEM.main });
+    const b = await placeOrder([{ productId: PRODUCT.chips, quantity: 1 }], { totem: TOTEM.main2 });
     expect([a.totemId, b.totemId]).toEqual([TOTEM.main, TOTEM.main2]);
   });
 
@@ -171,16 +182,19 @@ describe('store-scoped access', () => {
 
 describe('expiry across stores', () => {
   it('reaps expired orders in every store and releases each store\'s own stock', async () => {
-    const us = await placeOrder([{ itemId: ITEM.chips, quantity: 2 }]);
-    const br = await placeOrder([{ itemId: ITEM.chips, quantity: 5 }], { store: STORE.br, totem: TOTEM.br });
+    const us = await placeOrder([{ productId: PRODUCT.chips, quantity: 2 }]);
+    const br = await placeOrder([{ productId: BR_PRODUCT.chips, quantity: 5 }], {
+      store: STORE.br,
+      totem: TOTEM.br,
+    });
     await expireOrder(us.id);
     await expireOrder(br.id);
 
     const expired = await runSessionCleanup(() => {});
     expect(expired.sort()).toEqual([us.id, br.id].sort());
 
-    expect((await getStock(ITEM.chips, STORE.main)).reserved).toBe(0);
-    expect((await getStock(ITEM.chips, STORE.br)).reserved).toBe(0);
+    expect((await getStock(PRODUCT.chips, STORE.main)).reserved).toBe(0);
+    expect((await getStock(BR_PRODUCT.chips, STORE.br)).reserved).toBe(0);
     await assertStockInvariant();
   });
 });

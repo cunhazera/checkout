@@ -7,7 +7,8 @@ import { payOrder, setTerminal } from '../src/services/payment.service.js';
 import { HttpTerminal } from '../src/ports/http-terminal.js';
 import { getOrder } from '../src/services/order.service.js';
 import {
-  ITEM,
+  BR_PRODUCT,
+  PRODUCT,
   STORE,
   TOTEM,
   assertStockInvariant,
@@ -59,7 +60,7 @@ const charges = async () =>
     amountCents: number;
   }[];
 
-const buy = async (quantity = 2) => placeOrder([{ itemId: ITEM.chips, quantity }]);
+const buy = async (quantity = 2) => placeOrder([{ productId: PRODUCT.chips, quantity }]);
 
 describe('payment gateway: the happy paths', () => {
   it('approves a charge and decrements stock once', async () => {
@@ -69,14 +70,14 @@ describe('payment gateway: the happy paths', () => {
 
     expect(result.status).toBe('succeeded');
     expect(result.orderStatus).toBe('paid');
-    expect((await getStock(ITEM.chips)).quantity).toBe(22);
+    expect((await getStock(PRODUCT.chips)).quantity).toBe(22);
     expect(await charges()).toHaveLength(1);
     await assertStockInvariant();
   });
 
   it('sends the store currency, not a hard-coded one', async () => {
     await scenario({ scenario: 'approved' });
-    const order = await placeOrder([{ itemId: ITEM.chips, quantity: 1 }], {
+    const order = await placeOrder([{ productId: BR_PRODUCT.chips, quantity: 1 }], {
       store: STORE.br,
       totem: TOTEM.br,
     });
@@ -108,7 +109,7 @@ describe('payment gateway: declines', () => {
     expect(await getOrderStatus(order.id)).toBe('failed');
 
     // A decline must never move physical stock, and must give the units back.
-    const stock = await getStock(ITEM.chips);
+    const stock = await getStock(PRODUCT.chips);
     expect(stock).toEqual({ quantity: 24, reserved: 0 });
     await assertStockInvariant();
   });
@@ -121,7 +122,7 @@ describe('payment gateway: declines', () => {
     await scenario({ scenario: 'approved' });
     const second = await buy();
     expect((await payOrder(STORE.main, second.id, 'card')).status).toBe('succeeded');
-    expect((await getStock(ITEM.chips)).quantity).toBe(22);
+    expect((await getStock(PRODUCT.chips)).quantity).toBe(22);
   });
 });
 
@@ -136,7 +137,7 @@ describe('payment gateway: takes too long to answer', () => {
 
     expect(result.status).toBe('succeeded');
     expect(await getOrderStatus(order.id)).toBe('paid');
-    expect((await getStock(ITEM.chips)).quantity).toBe(22);
+    expect((await getStock(PRODUCT.chips)).quantity).toBe(22);
     await assertStockInvariant();
   });
 
@@ -148,7 +149,7 @@ describe('payment gateway: takes too long to answer', () => {
 
     expect(result.status).toBe('failed');
     expect(await getOrderStatus(order.id)).toBe('failed');
-    expect(await getStock(ITEM.chips)).toEqual({ quantity: 24, reserved: 0 });
+    expect(await getStock(PRODUCT.chips)).toEqual({ quantity: 24, reserved: 0 });
   });
 
   it('never guesses when the gateway never settles', async () => {
@@ -161,7 +162,7 @@ describe('payment gateway: takes too long to answer', () => {
     expect(result.supportReference).toBe(order.id);
     // Held, not released: the card may have been charged.
     expect(await getOrderStatus(order.id)).toBe('confirmed');
-    expect(await getStock(ITEM.chips)).toEqual({ quantity: 24, reserved: 2 });
+    expect(await getStock(PRODUCT.chips)).toEqual({ quantity: 24, reserved: 2 });
 
     const { rows } = await pool.query<{ status: string }>(
       'SELECT status FROM payments WHERE store_id = $1 AND order_id = $2',
@@ -193,7 +194,7 @@ describe('payment gateway: network and infrastructure failures', () => {
     // is unknown rather than failed.
     expect(result.status).toBe('unknown');
     expect(await getOrderStatus(order.id)).toBe('confirmed');
-    expect((await getStock(ITEM.chips)).reserved).toBe(2);
+    expect((await getStock(PRODUCT.chips)).reserved).toBe(2);
   });
 
   it('treats an unreachable gateway as a clean failure, not an unknown', async () => {
@@ -208,7 +209,7 @@ describe('payment gateway: network and infrastructure failures', () => {
 
     expect(result.status).toBe('failed');
     expect(result.declineReason).toBe('gateway_unreachable');
-    expect(await getStock(ITEM.chips)).toEqual({ quantity: 24, reserved: 0 });
+    expect(await getStock(PRODUCT.chips)).toEqual({ quantity: 24, reserved: 0 });
     await assertStockInvariant();
   });
 
@@ -233,7 +234,7 @@ describe('payment gateway: network and infrastructure failures', () => {
     const result = await payOrder(STORE.main, order.id, 'card');
 
     expect(result.status).toBe('succeeded');
-    expect((await getStock(ITEM.chips)).quantity).toBe(22);
+    expect((await getStock(PRODUCT.chips)).quantity).toBe(22);
   });
 
   it('reports a rejected request as failed without charging', async () => {
@@ -244,7 +245,7 @@ describe('payment gateway: network and infrastructure failures', () => {
 
     expect(result.status).toBe('failed');
     expect(result.declineReason).toBe('currency_not_supported');
-    expect(await getStock(ITEM.chips)).toEqual({ quantity: 24, reserved: 0 });
+    expect(await getStock(PRODUCT.chips)).toEqual({ quantity: 24, reserved: 0 });
     expect(await charges()).toHaveLength(0);
   });
 });
@@ -298,6 +299,6 @@ describe('payment gateway: idempotency', () => {
       results.filter((r) => r.status === 'fulfilled' && r.value.status === 'succeeded'),
     ).toHaveLength(1);
     expect(await charges()).toHaveLength(1);
-    expect((await getStock(ITEM.chips)).quantity).toBe(22);
+    expect((await getStock(PRODUCT.chips)).quantity).toBe(22);
   });
 });

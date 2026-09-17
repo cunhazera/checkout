@@ -3,7 +3,6 @@ import { config } from '../config.js';
 import { badRequest, orderExpired, orderNotFound, orderNotPending } from '../errors.js';
 import { cents } from '../money.js';
 import { commitReservations, releaseReservations } from './stock.service.js';
-import { invalidateMenuCache } from './menu.service.js';
 import { getStore } from './store.service.js';
 import type { PaymentMethod, PaymentTerminal, ChargeResult } from '../ports/payment-terminal.js';
 import { FakeTerminal } from '../ports/fake-terminal.js';
@@ -187,7 +186,6 @@ async function settleSuccess(
     );
     return rows[0]?.status ?? 'unknown';
   }, { retries: 20 });
-  invalidateMenuCache(storeId);
 
   if (orderStatus !== 'paid') {
     // The charge succeeded but the order had already moved on — most likely
@@ -237,7 +235,6 @@ async function settleFailure(
     );
     return rows[0]?.status ?? 'unknown';
   }, { retries: 20 });
-  invalidateMenuCache(storeId);
 
   return {
     storeId,

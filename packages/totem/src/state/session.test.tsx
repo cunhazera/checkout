@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { ApiError } from '../api/client';
-import type { MenuItem, Order, PayResult, Store } from '../api/types';
+import type { Order, PayResult, Product, Store } from '../api/types';
 
 /**
  * The API is mocked here on purpose: what these tests are about is how the
@@ -36,9 +36,9 @@ const STORE: Store = {
   taxBasisPoints: 0,
 };
 
-const item = (id: string, priceCents: number, availableQuantity = 10): MenuItem => ({
+const product = (id: string, priceCents: number, availableQuantity = 10): Product => ({
   id,
-  name: `Item ${id}`,
+  name: `Product ${id}`,
   description: 'size',
   priceCents,
   imageUrl: null,
@@ -46,7 +46,7 @@ const item = (id: string, priceCents: number, availableQuantity = 10): MenuItem 
   outOfStock: availableQuantity <= 0,
 });
 
-const MENU = [item('chips', 240), item('cola', 210), item('water', 150, 1)];
+const MENU = [product('chips', 240), product('cola', 210), product('water', 150, 1)];
 
 const order = (over: Partial<Order> = {}): Order => ({
   id: 'order-1',
@@ -103,7 +103,7 @@ describe('the basket', () => {
     expect(result.current.itemCount).toBe(2);
     expect(result.current.totals.subtotalCents).toBe(480);
     expect(result.current.totals.totalCents).toBe(480);
-    expect(result.current.status).toBe('Item chips added');
+    expect(result.current.status).toBe('Product chips added');
   });
 
   it('totals several lines', async () => {
@@ -153,9 +153,9 @@ describe('when an item sells out while the basket sits there', () => {
 
     const menuReadsBefore = api.getMenu.mock.calls.length;
     api.createOrder.mockRejectedValue(
-      new ApiError(409, 'item_out_of_stock', 'Still water is no longer available', {
-        itemId: 'water',
-        itemName: 'Still water',
+      new ApiError(409, 'product_out_of_stock', 'Still water is no longer available', {
+        productId: 'water',
+        productName: 'Still water',
       }),
     );
 
@@ -163,7 +163,7 @@ describe('when an item sells out while the basket sits there', () => {
 
     // The customer keeps everything that is still available.
     expect(result.current.screen).toBe('review');
-    expect(result.current.lines.map((l) => l.item.id)).toEqual(['chips']);
+    expect(result.current.lines.map((l) => l.product.id)).toEqual(['chips']);
     expect(result.current.failureMessage).toBe(
       'Still water just sold out and was removed from your order.',
     );

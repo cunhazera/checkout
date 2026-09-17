@@ -1,9 +1,10 @@
 /** Mirrors the API's wire format. All money is integer cents (ADR-005). */
 
-export interface MenuItem {
+/** A product, as one store sells it. Product ids belong to that store alone. */
+export interface Product {
   id: string;
   name: string;
-  /** The seed puts the pack size here ("150 g bag"). */
+  /** Pack size, e.g. "150 g bag". */
   description: string | null;
   priceCents: number;
   imageUrl: string | null;
@@ -26,7 +27,7 @@ export interface Store {
 export interface Menu {
   storeId: string;
   currency: string;
-  items: MenuItem[];
+  items: Product[];
 }
 
 export interface Session {
@@ -36,7 +37,7 @@ export interface Session {
 }
 
 export interface OrderLine {
-  itemId: string;
+  productId: string;
   name: string;
   quantity: number;
   unitPriceCents: number;

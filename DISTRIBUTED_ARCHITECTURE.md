@@ -28,9 +28,11 @@ everything below.
 2. **Start with one API and one database.** Nothing is distributed yet. The
    design only guarantees that each later step (a shared cache, partitioning,
    sharding, regions) is an addition, not a rewrite.
-3. **The catalog is global; selling is per store.** What a product *is* lives in
-   one place. Whether a store sells it, at what price, in what currency, and how
-   much is on the shelf are per store.
+3. **Products belong to the store that sells them.** There is no shared catalog:
+   a totem is filled from a local shelf, so the product's name, price, whether it
+   is for sale and how much is on that shelf are all the store's own rows.
+   Nothing one store does can change what another sells. (This reversed an
+   earlier "global catalog, local price" design — see Risks, Mitigated.)
 
 Phase 0, below, is done. It changes the data model and the API contract, which
 are the two things that are expensive to change once thousands of totems and
@@ -49,23 +51,22 @@ scratch in the one migration rather than amended by a second one.
 ```mermaid
 erDiagram
     stores ||--o{ totems : "has"
-    stores ||--o{ store_items : "sells"
-    items ||--o{ store_items : "listed as"
-    store_items ||--|| stock : "has"
+    stores ||--o{ products : "sells"
+    products ||--|| stock : "has"
     stores ||--o{ orders : "owns"
     totems ||--o{ orders : "placed"
     orders ||--|{ order_items : "contains"
-    items ||--o{ order_items : "refers to"
+    products ||--o{ order_items : "refers to"
     orders ||--o{ payments : "paid by"
 ```
 
 | Table | Scope | Primary key | Holds |
 |---|---|---|---|
 | `stores` | global | `id` | code, country, region, timezone, **currency**, locale, **tax rate (no default — see below)** |
-| `items` | global | `id` | catalog: name, description, image. **No price.** |
+
 | `totems` | store | `(store_id, id)` | the five devices per store |
-| `store_items` | store | `(store_id, item_id)` | the store's product range and **price** |
-| `stock` | store | `(store_id, item_id)` | quantity and reserved, per store |
+| `products` | store | `(store_id, id)` | name, description, image, **price**, and the one `active` switch |
+| `stock` | store | `(store_id, product_id)` | quantity and reserved, per store |
 | `orders` | store | `(store_id, id)` | now also records `totem_id` |
 | `order_items` | store | `(store_id, id)` | price snapshot, as before |
 | `payments` | store | `(store_id, id)` | idempotency key unique per store |
@@ -79,25 +80,19 @@ Why each change was made:
 - **Foreign keys carry the store.** `order_items → orders` is
   `(store_id, order_id)`, and `orders → totems` is `(store_id, totem_id)`. The
   database itself rejects an order from a totem registered to another store.
-- **Price moved from `items` to `store_items`.** One price per product can't
-  express two currencies. `items.price_cents` was dropped rather than kept as a
-  second source of truth for what customers are charged.
+- **One `products` table, not a catalog plus an overlay.** Once definitions are
+  not shared, a separate global table would hold nothing but a foreign key. One
+  price per product also cannot express two currencies.
 - **Currency and tax moved onto the store.** Tax used to be one global
   environment variable (`TAX_BASIS_POINTS`), which can't work across
   jurisdictions. It's gone.
-- **`stock` references `store_items`.** A store can't hold stock of a product it
-  doesn't sell.
-- **`order_items.item_id` still references the global catalog**, not
-  `store_items`, so order history survives a store dropping a product.
-- **Two different "off" switches, and they are not interchangeable.**
-  `store_items.active = false` withdraws a product from one store.
-  `items.active = false` discontinues it *everywhere* — every store's menu loses
-  it within `MENU_CACHE_MS`, including baskets already open. Anyone removing a
-  product from one region will reach for the catalog switch unless stopped, so:
-  the catalog flag is for genuine end-of-life only, deactivating a catalog item
-  is **refused while any store still lists it active**, and the admin surface
-  (open decision 4) must offer per-store withdrawal as the obvious action and
-  make the global one deliberate and slow.
+- **`stock` references `products`.** A store can't hold stock of a product it
+  doesn't sell, and a product id from another store simply does not resolve.
+- **`order_items` references the store's own product**, and products are
+  withdrawn with `active` rather than deleted, so history always resolves.
+- **One off switch, and it is local.** `products.active = false` withdraws a
+  product from the store that owns it. There is no global or regional switch to
+  reach for by mistake, because there is no global row.
 - **Indexes lead with `store_id`.** The one deliberate exception is
   `idx_orders_expiry`, used by the expiry job, which sweeps every store at once
   (after sharding, once per shard).
@@ -238,14 +233,13 @@ list for a later phase.
 |---|---|---|---|---|
 | API listens on localhost only, no auth | `config.ts` `HOST`, ADR-002 | the only client is a browser on the same machine | TLS, per-totem certificates, authenticated API | 1 |
 | Store id is trusted from the URL | `routes/stores.ts` | no network exposure | store derived from the device credential; URL checked against it | 1 |
-| Menu and store caches live in process memory | `menu.service.ts`, `store.service.ts` | one instance sees every write | shared cache under the same keys (`store:{storeId}:availability`), or availability read straight from the database — **a hard precondition for running more than one instance**, not a later nicety | 1 |
+| Store settings cached in process for 30 s | `store.service.ts` | one instance; currency and tax change rarely and never affect stock | shared cache under `store:{storeId}` when several instances run | 1 |
 | Expiry job runs in every API instance | `jobs/session-cleanup.ts` | there is one instance | one job for the whole fleet (leader election), or `FOR UPDATE SKIP LOCKED` | 1 |
 | The server talks to the card reader | `payment.service.ts`, `ports/` | fake terminal | cloud-driven reader, or the totem runs the payment and reports it | 1 |
 | Order ids are unique per store, not globally | `001_init.sql` | random UUIDs don't collide in practice | nothing, unless ids ever become non-random | — |
 | Migrations run in one transaction, and the schema is rewritten in place | `db/migrate.ts`, `001_init.sql` | nothing is deployed and no data matters | additive migrations, applied with the online procedure below | 1 |
 | Stock and order health checks are per store | `routes/store-info.ts` | a person checks one store | a central collector with a named owner and an alert threshold — **required before the second store opens**, because an escalation nobody reads is not an escalation | 1 |
 | One connection pool, sized for one database | `db/pool.ts` | a single Postgres serves every store | one pool per shard, keyed by store; PgBouncer in front | 2-3 |
-| Catalog names are in one language | `items.name` | one locale per seeded product | translations per locale | 4 |
 | `stores.region` is stored but unused | `001_init.sql` | nothing to place yet | decides which shard or region a store lives in | 3–4 |
 
 ---
@@ -262,14 +256,11 @@ Each phase starts when its trigger is actually hit, not before.
   and the server derives `storeId` and `totemId` from it.
 - Several API instances behind a load balancer. The balancer's idle timeout must
   be longer than the payment window (45 s today).
-- **Before the second instance is deployed:** menu availability moves to a shared
-  cache keyed by store, or is read from the database on every menu request. The
-  in-process cache is invalidated only on the instance that took the sale, so
-  with N instances a sold-out item stays on screen for up to `MENU_CACHE_MS` on
-  the other N-1. That turns `409 item_out_of_stock` at the pay screen from a
-  rare edge case into a routine one at peak, and the customer meets it *after*
-  choosing to pay. Deploying a second instance without this is a regression in
-  the product, not just in the cache.
+- ~~Menu availability must stop being cached per instance before a second one is
+  deployed.~~ **Done:** the menu cache was removed outright, so availability is
+  read from the database on every request and cannot go stale across instances.
+  The store settings cache (currency, tax, locale) remains, and never affects
+  stock.
 - The expiry job runs once for the fleet, not once per instance.
 - **Before the second store opens:** a central collector for the per-store
   probes (`/health/stock`, `/health/orders`, `chargedButNotPaid`), with a named
@@ -328,7 +319,8 @@ latency, or `orders` too large to maintain comfortably.
 - Reports that convert between currencies, with the exchange rate recorded at
   the time of sale.
 - Reports in each store's local time, using `stores.timezone`.
-- Catalog translations.
+- Product names are already per store, so a store simply writes its own
+  language. What is missing is the admin surface to do that.
 - Tax beyond a single percentage per store (item-level rates, tax-inclusive
   pricing rules).
 
@@ -346,7 +338,7 @@ and measured at 16 seconds on a 200k-order database in a single transaction —
 acceptable offline, not acceptable on a live one. The same change without
 downtime, using adding `store_id` as the example:
 
-1. **Expand.** Create `stores`, `totems` and `store_items`. Add `store_id` and
+1. **Expand.** Create `stores`, `totems` and `products`. Add `store_id` and
    `totem_id` as nullable columns. Both steps are near-instant.
 2. **Deploy code that writes both shapes**, filling the new columns on every
    insert.
@@ -380,9 +372,10 @@ downtime, using adding `store_id` as the example:
    receipts** (Brazil's NFC-e was flagged in the original implementation plan and
    never resolved). A store in a country whose rules are unimplemented must not
    be openable.
-3. **Pricing.** Prices are per store today. If regions share price lists, a
-   price-list table between `stores` and `store_items` avoids updating thousands
-   of rows per change.
+3. **Pricing.** Prices are per store, on the product row. If regions ever share
+   price lists, a price-list table between `stores` and `products` avoids
+   updating thousands of rows per change — but that reintroduces a shared object,
+   which is exactly what this design removed, so it needs a deliberate decision.
 4. **Where does the store and totem registry live?** Today, SQL inserts. Fleet
    operations will need an admin API or back-office for opening stores and
    registering totems.
@@ -395,8 +388,8 @@ From a premortem on 2026-09-17. Each of these changed a requirement above.
 |---|---|---|
 | **Totem identity baked into the build.** Fleets are provisioned by imaging one disk; anything compiled in is duplicated across every device, and duplicate `totem_id`s look like legitimate rows. | Per-device attribution and reconciliation become impossible, silently. | "Totem provisioning" now requires identity at **runtime** from device-local config or the device certificate; production builds must refuse to embed it; duplicate ids in use at once are an alert. |
 | **Tax defaulting to zero.** Stores are opened by copying the previous `INSERT`, so a silent `0` spreads. | Months of orders with `tax_cents = 0`, discovered at quarter close; a fiscal-receipt requirement discovered at a border. | `stores.tax_basis_points` now has **no default** (enforced in `001_init.sql`); zero must be chosen. Fiscal receipts are a per-country launch blocker. |
-| **`items.active` is a global switch** that looks like the per-store one. | Withdrawing a product from one region removes it from every store within `MENU_CACHE_MS`, mid-basket. | The data-model notes now separate the two switches: catalog deactivation is end-of-life only, refused while any store still lists the item, and the admin surface must make per-store withdrawal the obvious action. |
-| **Per-instance menu cache** invalidated only on the instance that took the sale. | With N instances, sold-out items linger on N-1; the pay-screen 409 goes from rare to routine, met *after* the customer commits. | Now a **hard precondition** in Phase 1 and in the assumptions table: no second instance until availability is shared or read from the database. |
+| **`items.active` was a global switch** that looked like the per-store one. | Withdrawing a product from one region would remove it from every store in the country, mid-basket. | First mitigated with a rule ("refused while any store still lists it"), then removed entirely: products are store-owned, so **no global switch exists to misuse**. A constraint nobody can break beat a rule somebody had to remember. |
+| **Per-instance menu cache** invalidated only on the instance that took the sale. | With N instances, sold-out items linger on N-1; the pay-screen 409 goes from rare to routine, met *after* the customer commits. | The cache was **deleted**. Availability is read from the database on every menu request — measured at about a millisecond per store with 2,001 stores, which is not worth trading for staleness. |
 | **Per-store health endpoints with no fleet view.** | Orders stuck in `confirmed` hold stock and `chargedButNotPaid` is money taken for goods not released — both accumulate unseen. | Phase 1 now requires a central collector **before the second store opens**, with a named owner, a threshold and an alert. |
 
 ## Risks — Accepted

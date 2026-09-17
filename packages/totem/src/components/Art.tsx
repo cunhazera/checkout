@@ -5,8 +5,8 @@ import { artFor } from '../data/presentation';
  * for real product photography — when photos land they drop into this same box
  * at the same radius, wrapped in the design system's `.washed` class.
  */
-export function Art({ itemId, className }: { itemId: string; className: string }) {
-  const art = artFor(itemId);
+export function Art({ productId, className }: { productId: string; className: string }) {
+  const art = artFor(productId);
   return (
     <div className={`${className} tp-art-${art.palette}`}>
       <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">

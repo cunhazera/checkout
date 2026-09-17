@@ -6,7 +6,7 @@ import { runSessionCleanup } from '../src/jobs/session-cleanup.js';
 import {
   placeOrder,
   STORE,
-  ITEM,
+  PRODUCT,
   assertStockInvariant,
   expireOrder,
   getOrderStatus,
@@ -28,7 +28,7 @@ beforeEach(async () => {
 afterAll(closePool);
 
 const newOrder = () =>
-  placeOrder([{ itemId: ITEM.chips, quantity: 2 }]);
+  placeOrder([{ productId: PRODUCT.chips, quantity: 2 }]);
 
 describe('payment (ADR-003)', () => {
   it('on success: marks paid and decrements physical stock exactly once', async () => {
@@ -38,7 +38,7 @@ describe('payment (ADR-003)', () => {
     expect(result.status).toBe('succeeded');
     expect(await getOrderStatus(order.id)).toBe('paid');
 
-    const stock = await getStock(ITEM.chips);
+    const stock = await getStock(PRODUCT.chips);
     expect(stock.quantity).toBe(22); // 24 - 2, decremented only here
     expect(stock.reserved).toBe(0);
     await assertStockInvariant();
@@ -53,7 +53,7 @@ describe('payment (ADR-003)', () => {
     expect(result.declineReason).toBe('card_declined');
     expect(await getOrderStatus(order.id)).toBe('failed');
 
-    const stock = await getStock(ITEM.chips);
+    const stock = await getStock(PRODUCT.chips);
     expect(stock.quantity).toBe(24);
     expect(stock.reserved).toBe(0);
     await assertStockInvariant();
@@ -70,7 +70,7 @@ describe('payment (ADR-003)', () => {
     // flight, outcome unknown — and stock stays held.
     expect(await getOrderStatus(order.id)).toBe('confirmed');
 
-    const stock = await getStock(ITEM.chips);
+    const stock = await getStock(PRODUCT.chips);
     expect(stock.quantity).toBe(24);
     expect(stock.reserved).toBe(2);
 
@@ -84,7 +84,7 @@ describe('payment (ADR-003)', () => {
     // the card may well have been charged. Only a human can resolve it.
     await expireOrder(order.id);
     expect(await runSessionCleanup(() => {})).toEqual([]);
-    expect((await getStock(ITEM.chips)).reserved).toBe(2);
+    expect((await getStock(PRODUCT.chips)).reserved).toBe(2);
     expect(await getOrderStatus(order.id)).toBe('confirmed');
   }, 60_000);
 
@@ -95,7 +95,7 @@ describe('payment (ADR-003)', () => {
 
     expect(result.status).toBe('succeeded');
     expect(await getOrderStatus(order.id)).toBe('paid');
-    expect((await getStock(ITEM.chips)).quantity).toBe(22);
+    expect((await getStock(PRODUCT.chips)).quantity).toBe(22);
     await assertStockInvariant();
   }, 60_000);
 
@@ -129,7 +129,7 @@ describe('payment (ADR-003)', () => {
     const order = await newOrder();
     await payOrder(STORE.main, order.id, 'card');
     await expect(payOrder(STORE.main, order.id, 'card')).rejects.toMatchObject({ code: 'order_not_pending' });
-    expect((await getStock(ITEM.chips)).quantity).toBe(22); // not decremented twice
+    expect((await getStock(PRODUCT.chips)).quantity).toBe(22); // not decremented twice
   });
 
   it('records the chosen payment method', async () => {

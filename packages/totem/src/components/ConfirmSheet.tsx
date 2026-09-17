@@ -1,11 +1,11 @@
-import type { MenuItem } from '../api/types';
+import type { Product } from '../api/types';
 import { formatCents } from '../money';
 import { Art } from './Art';
 import { Stepper } from './Stepper';
 import { t } from '../i18n';
 
 interface Props {
-  item: MenuItem;
+  product: Product;
   quantity: number;
   /** Already in the basket — the sheet must not let the total exceed stock. */
   alreadyInCart: number;
@@ -19,25 +19,25 @@ interface Props {
  * customer confirms which product and how many.
  */
 export function ConfirmSheet({
-  item,
+  product,
   quantity,
   alreadyInCart,
   onQuantity,
   onCancel,
   onConfirm,
 }: Props) {
-  const remaining = Math.max(0, item.availableQuantity - alreadyInCart);
-  const lineTotal = item.priceCents * quantity;
+  const remaining = Math.max(0, product.availableQuantity - alreadyInCart);
+  const lineTotal = product.priceCents * quantity;
 
   return (
     <div className="tp-backdrop" onClick={onCancel}>
       <div className="tp-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="tp-sheet-head">
-          <Art itemId={item.id} className="tp-sheet-art tp-art" />
+          <Art productId={product.id} className="tp-sheet-art tp-art" />
           <div className="tp-sheet-info">
-            <div className="tp-sheet-name">{item.name}</div>
-            {item.description && <div className="tp-sheet-size">{item.description}</div>}
-            <div className="tp-sheet-price">{formatCents(item.priceCents)}</div>
+            <div className="tp-sheet-name">{product.name}</div>
+            {product.description && <div className="tp-sheet-size">{product.description}</div>}
+            <div className="tp-sheet-price">{formatCents(product.priceCents)}</div>
           </div>
         </div>
 

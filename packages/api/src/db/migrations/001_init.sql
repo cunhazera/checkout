@@ -44,17 +44,6 @@ CREATE TABLE stores (
     updated_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 
--- The catalog: what a product IS. No price — a single price cannot express two
--- currencies, so prices live per store in store_items.
-CREATE TABLE items (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name        VARCHAR(255) NOT NULL,
-    description TEXT,
-    image_url   VARCHAR(500),
-    active      BOOLEAN NOT NULL DEFAULT true,      -- discontinued everywhere
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
 -- ---------------------------------------------------------------------------
 -- Store-owned tables
 -- ---------------------------------------------------------------------------
@@ -71,14 +60,27 @@ CREATE TABLE totems (
     UNIQUE (store_id, label)
 );
 
--- A store's product range and its price, in the store's currency.
-CREATE TABLE store_items (
-    store_id    UUID        NOT NULL REFERENCES stores(id),
-    item_id     UUID        NOT NULL REFERENCES items(id),
-    price_cents BIGINT      NOT NULL CHECK (price_cents >= 0),
-    active      BOOLEAN     NOT NULL DEFAULT true,  -- withdrawn from this store only
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (store_id, item_id)
+-- Products belong to a store. There is no shared catalog: a totem is filled
+-- from a local shelf, so what a product is, what it costs and whether it is for
+-- sale are all decided by the store that sells it.
+--
+-- `active` is the ONLY off switch, and it is per store. The previous design had
+-- a global catalog flag next to this one, which meant withdrawing a product from
+-- one region could empty every menu in the country. That switch no longer
+-- exists — a constraint nobody can break beats a rule somebody must remember.
+--
+-- Products are never hard-deleted: order history refers to them.
+CREATE TABLE products (
+    store_id    UUID         NOT NULL REFERENCES stores(id),
+    id          UUID         NOT NULL DEFAULT gen_random_uuid(),
+    name        VARCHAR(255) NOT NULL,
+    description TEXT,                                -- pack size, e.g. '150 g bag'
+    image_url   VARCHAR(500),
+    price_cents BIGINT       NOT NULL CHECK (price_cents >= 0),
+    active      BOOLEAN      NOT NULL DEFAULT true,
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (store_id, id)
 );
 
 -- Physical stock on one store's shelf.
@@ -89,12 +91,12 @@ CREATE TABLE store_items (
 -- dropped. Stock can only exist for a product the store actually sells.
 CREATE TABLE stock (
     store_id   UUID NOT NULL,
-    item_id    UUID NOT NULL,
+    product_id UUID NOT NULL,
     quantity   INT  NOT NULL DEFAULT 0,             -- physical units on hand
     reserved   INT  NOT NULL DEFAULT 0,             -- held for in-progress orders
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (store_id, item_id),
-    FOREIGN KEY (store_id, item_id) REFERENCES store_items (store_id, item_id),
+    PRIMARY KEY (store_id, product_id),
+    FOREIGN KEY (store_id, product_id) REFERENCES products (store_id, id),
     CHECK (quantity >= 0),
     CHECK (reserved >= 0),
     CHECK (quantity >= reserved)
@@ -131,17 +133,18 @@ CREATE TABLE orders (
 );
 
 -- Line items. unit_price_cents is a snapshot: a later price change must not
--- rewrite what a customer was charged. item_id points at the global catalog
--- rather than store_items, so history survives a store dropping a product.
+-- rewrite what a customer was charged. The product reference stays valid
+-- because products are withdrawn with `active`, never deleted.
 CREATE TABLE order_items (
     store_id         UUID   NOT NULL,
     id               UUID   NOT NULL DEFAULT gen_random_uuid(),
     order_id         UUID   NOT NULL,
-    item_id          UUID   NOT NULL REFERENCES items(id),
+    product_id       UUID   NOT NULL,
     quantity         INT    NOT NULL CHECK (quantity > 0),
     unit_price_cents BIGINT NOT NULL,
     PRIMARY KEY (store_id, id),
-    FOREIGN KEY (store_id, order_id) REFERENCES orders (store_id, id)
+    FOREIGN KEY (store_id, order_id) REFERENCES orders (store_id, id),
+    FOREIGN KEY (store_id, product_id) REFERENCES products (store_id, id)
 );
 
 -- One row per payment attempt (ADR-003).
@@ -182,7 +185,8 @@ CREATE TABLE payments (
 -- PROGRESS.md "Index tuning".
 -- ---------------------------------------------------------------------------
 
-CREATE INDEX idx_items_active ON items (active) WHERE active = true;
+-- Serves the menu: filter by store, keep only what is for sale, in name order.
+CREATE INDEX idx_products_store_active ON products (store_id, name) WHERE active;
 
 CREATE INDEX idx_totems_store ON totems (store_id) WHERE active;
 
@@ -208,8 +212,8 @@ CREATE INDEX idx_payments_store_order ON payments (store_id, order_id, created_a
 CREATE INDEX idx_payments_unresolved ON payments (created_at)
     WHERE status IN ('pending', 'unknown');
 
--- Deliberately NOT indexed: order_items(item_id). It is an unindexed foreign
--- key, which normally warrants fixing, but nothing deletes or re-keys an item
--- (the catalog soft-deletes via items.active) and no current query drives from
--- it. Measured at 4.3 MB on 600k lines with a write cost on the hottest insert
--- path, for zero read benefit. Add it when per-item reporting arrives.
+-- Deliberately NOT indexed: order_items(store_id, product_id). It is an
+-- unindexed foreign key, which normally warrants fixing, but nothing deletes or
+-- re-keys a product (withdrawal is products.active) and no current query drives
+-- from it. Measured at 4.3 MB on 600k lines with a write cost on the hottest
+-- insert path, for zero read benefit. Add it when per-product reporting arrives.

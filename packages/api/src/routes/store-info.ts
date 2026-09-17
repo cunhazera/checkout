@@ -21,17 +21,17 @@ export async function storeInfoRoutes(app: FastifyInstance): Promise<void> {
    * aggregate, and after sharding it could not run in one query anyway.
    */
   app.get('/health/stock', { schema: { params: storeParams } }, async (req) => {
-    const { rows } = await pool.query<{ item_id: string; reserved: number; expected: number }>(
-      `SELECT s.item_id, s.reserved, COALESCE(h.held, 0)::int AS expected
+    const { rows } = await pool.query<{ product_id: string; reserved: number; expected: number }>(
+      `SELECT s.product_id, s.reserved, COALESCE(h.held, 0)::int AS expected
          FROM stock s
          LEFT JOIN (
-           SELECT oi.item_id, SUM(oi.quantity) AS held
+           SELECT oi.product_id, SUM(oi.quantity) AS held
              FROM orders o
              JOIN order_items oi ON oi.store_id = o.store_id AND oi.order_id = o.id
             WHERE o.store_id = $1
               AND o.status IN ('pending', 'confirmed')
-            GROUP BY oi.item_id
-         ) h ON h.item_id = s.item_id
+            GROUP BY oi.product_id
+         ) h ON h.product_id = s.product_id
         WHERE s.store_id = $1`,
       [req.store.id],
     );

@@ -5,7 +5,7 @@ import { FakeTerminal } from '../src/ports/fake-terminal.js';
 import {
   placeOrder,
   STORE,
-  ITEM,
+  PRODUCT,
   assertStockInvariant,
   getOrderStatus,
   getStock,
@@ -33,30 +33,30 @@ afterAll(closePool);
  */
 describe('two customers, one unit left', () => {
   it('sequential: first buys it, second is denied', async () => {
-    await setStock(ITEM.sandwich, 1);
+    await setStock(PRODUCT.sandwich, 1);
 
     // Customer A takes the last sandwich and pays for it.
     const a = await placeOrder([
-      { itemId: ITEM.sandwich, quantity: 1 },
+      { productId: PRODUCT.sandwich, quantity: 1 },
     ]);
     const paid = await payOrder(STORE.main, a.id, 'card');
     expect(paid.status).toBe('succeeded');
-    expect((await getStock(ITEM.sandwich)).quantity).toBe(0);
+    expect((await getStock(PRODUCT.sandwich)).quantity).toBe(0);
 
     // Customer B walks up a moment later.
     await expect(
-      placeOrder([{ itemId: ITEM.sandwich, quantity: 1 }]),
-    ).rejects.toMatchObject({ code: 'item_out_of_stock', details: { available: 0 } });
+      placeOrder([{ productId: PRODUCT.sandwich, quantity: 1 }]),
+    ).rejects.toMatchObject({ code: 'product_out_of_stock', details: { available: 0 } });
 
     await assertStockInvariant();
   });
 
   it('simultaneous: exactly one customer gets to pay, the other is denied', async () => {
-    await setStock(ITEM.sandwich, 1);
+    await setStock(PRODUCT.sandwich, 1);
 
     const [a, b] = await Promise.allSettled([
-      placeOrder([{ itemId: ITEM.sandwich, quantity: 1 }]),
-      placeOrder([{ itemId: ITEM.sandwich, quantity: 1 }]),
+      placeOrder([{ productId: PRODUCT.sandwich, quantity: 1 }]),
+      placeOrder([{ productId: PRODUCT.sandwich, quantity: 1 }]),
     ]);
 
     const winners = [a, b].filter((r) => r.status === 'fulfilled');
@@ -64,7 +64,7 @@ describe('two customers, one unit left', () => {
     expect(winners).toHaveLength(1);
     expect(losers).toHaveLength(1);
     expect((losers[0] as PromiseRejectedResult).reason).toMatchObject({
-      code: 'item_out_of_stock',
+      code: 'product_out_of_stock',
     });
 
     // The winner completes the purchase; the physical unit leaves exactly once.
@@ -72,36 +72,36 @@ describe('two customers, one unit left', () => {
     const paid = await payOrder(STORE.main, order.id, 'card');
     expect(paid.status).toBe('succeeded');
 
-    const stock = await getStock(ITEM.sandwich);
+    const stock = await getStock(PRODUCT.sandwich);
     expect(stock.quantity).toBe(0);
     expect(stock.reserved).toBe(0);
     await assertStockInvariant();
   });
 
   it('the denied customer can buy it if the winner fails to pay', async () => {
-    await setStock(ITEM.sandwich, 1);
+    await setStock(PRODUCT.sandwich, 1);
 
     const a = await placeOrder([
-      { itemId: ITEM.sandwich, quantity: 1 },
+      { productId: PRODUCT.sandwich, quantity: 1 },
     ]);
 
     // B is denied while A holds the reservation.
     await expect(
-      placeOrder([{ itemId: ITEM.sandwich, quantity: 1 }]),
-    ).rejects.toMatchObject({ code: 'item_out_of_stock' });
+      placeOrder([{ productId: PRODUCT.sandwich, quantity: 1 }]),
+    ).rejects.toMatchObject({ code: 'product_out_of_stock' });
 
     // A's card is declined, which returns the unit to the shelf.
     terminal.setMode('decline');
     expect((await payOrder(STORE.main, a.id, 'card')).status).toBe('failed');
-    expect((await getStock(ITEM.sandwich)).reserved).toBe(0);
+    expect((await getStock(PRODUCT.sandwich)).reserved).toBe(0);
 
     // Now B can buy it.
     terminal.setMode('approve');
     const b = await placeOrder([
-      { itemId: ITEM.sandwich, quantity: 1 },
+      { productId: PRODUCT.sandwich, quantity: 1 },
     ]);
     expect((await payOrder(STORE.main, b.id, 'card')).status).toBe('succeeded');
-    expect((await getStock(ITEM.sandwich)).quantity).toBe(0);
+    expect((await getStock(PRODUCT.sandwich)).quantity).toBe(0);
     await assertStockInvariant();
   });
 });
@@ -113,7 +113,7 @@ describe('two customers, one unit left', () => {
 describe('payment idempotency', () => {
   it('sequential: paying an already-paid order is refused', async () => {
     const order = await placeOrder([
-      { itemId: ITEM.chips, quantity: 2 },
+      { productId: PRODUCT.chips, quantity: 2 },
     ]);
     expect((await payOrder(STORE.main, order.id, 'card')).status).toBe('succeeded');
 
@@ -122,7 +122,7 @@ describe('payment idempotency', () => {
     });
 
     // Charged once, decremented once.
-    expect((await getStock(ITEM.chips)).quantity).toBe(22);
+    expect((await getStock(PRODUCT.chips)).quantity).toBe(22);
     const { rows } = await pool.query<{ count: string }>(
       `SELECT COUNT(*) AS count FROM payments WHERE order_id = $1 AND status = 'succeeded'`,
       [order.id],
@@ -132,7 +132,7 @@ describe('payment idempotency', () => {
 
   it('concurrent double-tap charges the card exactly once', async () => {
     const order = await placeOrder([
-      { itemId: ITEM.chips, quantity: 2 },
+      { productId: PRODUCT.chips, quantity: 2 },
     ]);
 
     const results = await Promise.allSettled([
@@ -153,14 +153,14 @@ describe('payment idempotency', () => {
     expect(Number(rows[0]!.count)).toBe(1);
 
     // And stock moved exactly once.
-    expect((await getStock(ITEM.chips)).quantity).toBe(22);
+    expect((await getStock(PRODUCT.chips)).quantity).toBe(22);
     expect(await getOrderStatus(order.id)).toBe('paid');
     await assertStockInvariant();
   });
 
   it('three simultaneous taps still produce one charge', async () => {
     const order = await placeOrder([
-      { itemId: ITEM.cola, quantity: 1 },
+      { productId: PRODUCT.cola, quantity: 1 },
     ]);
 
     const results = await Promise.allSettled([
@@ -178,7 +178,7 @@ describe('payment idempotency', () => {
       [order.id],
     );
     expect(Number(rows[0]!.count)).toBe(1);
-    expect((await getStock(ITEM.cola)).quantity).toBe(19);
+    expect((await getStock(PRODUCT.cola)).quantity).toBe(19);
     await assertStockInvariant();
   });
 });

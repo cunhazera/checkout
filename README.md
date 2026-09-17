@@ -27,16 +27,17 @@ plus a confirm sheet that guards against mis-taps. Behind that:
 - **A crash cannot lose a payment.** The intent is recorded before the gateway
   is called, and a background job finishes any attempt that was interrupted.
 - **Abandoned baskets return their stock** automatically.
-- **Each store has its own prices, currency, tax rate and language.** A São
-  Paulo totem shows "R$ 12,90" and Portuguese copy; a US one shows "$2.40" and
-  English.
+- **Each store owns its products outright** — its own rows, names, prices,
+  currency, tax rate and language. A São Paulo totem sells "Batata frita" at
+  "R$ 12,90" in Portuguese; a US one sells "Salted chips" at "$2.40". Nothing one
+  store does can change what another sells.
 
 ## How it is put together
 
 ```
 packages/totem     React kiosk UI (1080x1920 portrait)
        │  HTTP
-packages/api       Fastify + Postgres: catalog, stock, orders, payments
+packages/api       Fastify + Postgres: products, stock, orders, payments
        │  HTTP
 packages/gateway   Mock card processor for development and tests
 ```
@@ -208,6 +209,6 @@ will reset whatever demo data you were looking at.
 
 Honest list: no authentication or TLS (the API binds to localhost only, and the
 architecture doc explains when that stops being enough), no real card reader, no
-refund path, no admin screens for opening a store, no receipt QR generation, and
-product names come from a single-language catalog. Tax is configured at 0 for
+refund path, no restocking (stock.quantity is updated by hand), no receipt QR,
+and no admin surface for entering a store's products. Tax is configured at 0 for
 both demo stores.

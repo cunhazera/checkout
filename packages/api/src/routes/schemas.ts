@@ -42,10 +42,10 @@ export const createOrderBody = {
       maxItems: 50,
       items: {
         type: 'object',
-        required: ['itemId', 'quantity'],
+        required: ['productId', 'quantity'],
         additionalProperties: false,
         properties: {
-          itemId: uuid,
+          productId: uuid,
           quantity: { type: 'integer', minimum: 1, maximum: 99 },
         },
       },

@@ -7,7 +7,7 @@ import { createOrderBody, createPaymentBody, storeOrderParams, storeParams } fro
 interface CreateOrderBody {
   sessionId: string;
   totemId: string;
-  items: { itemId: string; quantity: number }[];
+  items: { productId: string; quantity: number }[];
 }
 
 interface CreatePaymentBody {

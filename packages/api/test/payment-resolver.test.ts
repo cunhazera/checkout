@@ -6,7 +6,7 @@ import { payOrder, setTerminal } from '../src/services/payment.service.js';
 import { runPaymentResolver } from '../src/jobs/payment-resolver.js';
 import { HttpTerminal } from '../src/ports/http-terminal.js';
 import {
-  ITEM,
+  PRODUCT,
   STORE,
   assertStockInvariant,
   getOrderStatus,
@@ -63,7 +63,7 @@ const paymentRow = async (orderId: string) => {
  * payment 'pending', stock still reserved.
  */
 async function crashMidPayment(quantity = 2) {
-  const order = await placeOrder([{ itemId: ITEM.chips, quantity }]);
+  const order = await placeOrder([{ productId: PRODUCT.chips, quantity }]);
   const key = `pay_${order.id}_1`;
   await pool.query(
     `UPDATE orders SET status = 'confirmed' WHERE store_id = $1 AND id = $2`,
@@ -103,14 +103,14 @@ describe('payment resolver: finishing what a crash interrupted', () => {
     await chargeAtGateway(key, order.totalCents, 'approved');
 
     expect(await getOrderStatus(order.id)).toBe('confirmed');
-    expect((await getStock(ITEM.chips)).reserved).toBe(2);
+    expect((await getStock(PRODUCT.chips)).reserved).toBe(2);
 
     const result = await resolve();
 
     expect(result).toMatchObject({ checked: 1, settled: 1 });
     expect(await getOrderStatus(order.id)).toBe('paid');
     expect((await paymentRow(order.id)).status).toBe('succeeded');
-    expect(await getStock(ITEM.chips)).toEqual({ quantity: 22, reserved: 0 });
+    expect(await getStock(PRODUCT.chips)).toEqual({ quantity: 22, reserved: 0 });
     await assertStockInvariant();
   });
 
@@ -122,7 +122,7 @@ describe('payment resolver: finishing what a crash interrupted', () => {
 
     expect(await getOrderStatus(order.id)).toBe('failed');
     expect((await paymentRow(order.id)).status).toBe('failed');
-    expect(await getStock(ITEM.chips)).toEqual({ quantity: 24, reserved: 0 });
+    expect(await getStock(PRODUCT.chips)).toEqual({ quantity: 24, reserved: 0 });
     await assertStockInvariant();
   });
 
@@ -136,7 +136,7 @@ describe('payment resolver: finishing what a crash interrupted', () => {
     expect(result.settled).toBe(1);
     expect(await getOrderStatus(order.id)).toBe('failed');
     expect((await paymentRow(order.id)).status).toBe('failed');
-    expect(await getStock(ITEM.chips)).toEqual({ quantity: 24, reserved: 0 });
+    expect(await getStock(PRODUCT.chips)).toEqual({ quantity: 24, reserved: 0 });
     await assertStockInvariant();
   });
 
@@ -149,7 +149,7 @@ describe('payment resolver: finishing what a crash interrupted', () => {
 
     expect(result).toMatchObject({ settled: 0, stillUnknown: 1 });
     expect(await getOrderStatus(order.id)).toBe('confirmed');
-    expect((await getStock(ITEM.chips)).reserved).toBe(2);
+    expect((await getStock(PRODUCT.chips)).reserved).toBe(2);
   });
 
   it('gives up after its budget and says so, instead of asking forever', async () => {
@@ -186,10 +186,10 @@ describe('payment resolver: not making things worse', () => {
     // The trap: settling blindly would take the units off the shelf a second
     // time, selling one unit twice over.
     await gateway.inject({ method: 'POST', url: '/control/scenario', payload: { scenario: 'approved' } });
-    const order = await placeOrder([{ itemId: ITEM.chips, quantity: 2 }]);
+    const order = await placeOrder([{ productId: PRODUCT.chips, quantity: 2 }]);
     await payOrder(STORE.main, order.id, 'card');
 
-    expect(await getStock(ITEM.chips)).toEqual({ quantity: 22, reserved: 0 });
+    expect(await getStock(PRODUCT.chips)).toEqual({ quantity: 22, reserved: 0 });
 
     // Rewind the payment row as though the settle had never been recorded.
     await pool.query(
@@ -202,7 +202,7 @@ describe('payment resolver: not making things worse', () => {
     expect(result.settled).toBe(1);
     expect(await getOrderStatus(order.id)).toBe('paid');
     // Unchanged: 22, not 20.
-    expect(await getStock(ITEM.chips)).toEqual({ quantity: 22, reserved: 0 });
+    expect(await getStock(PRODUCT.chips)).toEqual({ quantity: 22, reserved: 0 });
     await assertStockInvariant();
   });
 
@@ -214,7 +214,7 @@ describe('payment resolver: not making things worse', () => {
 
     // SKIP LOCKED means only one of them claims the row.
     expect(a.checked + b.checked).toBe(1);
-    expect(await getStock(ITEM.chips)).toEqual({ quantity: 22, reserved: 0 });
+    expect(await getStock(PRODUCT.chips)).toEqual({ quantity: 22, reserved: 0 });
     await assertStockInvariant();
   });
 
@@ -250,7 +250,7 @@ describe('payment resolver: not making things worse', () => {
 
 describe('payment resolver: the terminal throwing is not a black hole', () => {
   it('records unknown rather than leaving the attempt pending', async () => {
-    const order = await placeOrder([{ itemId: ITEM.chips, quantity: 1 }]);
+    const order = await placeOrder([{ productId: PRODUCT.chips, quantity: 1 }]);
     setTerminal({
       charge: async () => {
         throw new Error('driver bug');
@@ -266,6 +266,6 @@ describe('payment resolver: the terminal throwing is not a black hole', () => {
     // honest description of what happened.
     expect((await paymentRow(order.id)).status).toBe('unknown');
     expect(await getOrderStatus(order.id)).toBe('confirmed');
-    expect((await getStock(ITEM.chips)).reserved).toBe(1);
+    expect((await getStock(PRODUCT.chips)).reserved).toBe(1);
   });
 });

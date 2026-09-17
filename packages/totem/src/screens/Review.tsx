@@ -10,7 +10,7 @@ interface Props {
   taxBasisPoints: number;
   notice: string | null;
   busy: boolean;
-  onQuantity: (itemId: string, next: number) => void;
+  onQuantity: (productId: string, next: number) => void;
   onAddMore: () => void;
   onPay: () => void;
 }
@@ -41,27 +41,27 @@ export function Review({
           // The prototype's copy said "scan or tap"; there is no scanner.
           <div className="tp-empty">{t('basketEmpty')}</div>
         ) : (
-          lines.map(({ item, quantity }) => (
-            <div className="tp-line" key={item.id}>
-              <Art itemId={item.id} className="tp-line-art tp-art" />
+          lines.map(({ product, quantity }) => (
+            <div className="tp-line" key={product.id}>
+              <Art productId={product.id} className="tp-line-art tp-art" />
               <div className="tp-line-info">
-                <div className="tp-line-name">{item.name}</div>
+                <div className="tp-line-name">{product.name}</div>
                 <div className="tp-line-meta">
-                  {item.description
+                  {product.description
                     ? t('eachAndSize', {
-                        price: formatCents(item.priceCents),
-                        size: item.description,
+                        price: formatCents(product.priceCents),
+                        size: product.description,
                       })
-                    : t('each', { price: formatCents(item.priceCents) })}
+                    : t('each', { price: formatCents(product.priceCents) })}
                 </div>
               </div>
               <Stepper
                 value={quantity}
-                onChange={(n) => onQuantity(item.id, n)}
+                onChange={(n) => onQuantity(product.id, n)}
                 min={0}
-                max={item.availableQuantity}
+                max={product.availableQuantity}
               />
-              <div className="tp-line-total">{formatCents(item.priceCents * quantity)}</div>
+              <div className="tp-line-total">{formatCents(product.priceCents * quantity)}</div>
             </div>
           ))
         )}

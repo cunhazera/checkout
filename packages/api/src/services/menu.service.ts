@@ -1,8 +1,7 @@
 import { pool } from '../db/pool.js';
-import { config } from '../config.js';
 import { cents, type Cents } from '../money.js';
 
-export interface MenuItem {
+export interface MenuProduct {
   id: string;
   name: string;
   description: string | null;
@@ -12,35 +11,20 @@ export interface MenuItem {
   outOfStock: boolean;
 }
 
-interface CacheEntry {
-  items: MenuItem[];
-  at: number;
-}
-
 /**
- * One entry per store. ADR-001 rejected Redis and that still holds for a single
- * API instance: a store's menu fits in memory. The cache is keyed by store id
- * so that moving it to a shared cache later is a change of storage, not of
- * design — see DISTRIBUTED_ARCHITECTURE.md.
+ * One store's menu, read fresh every time.
  *
- * Stock writes invalidate only their own store's entry. A 10-second stale
- * window after a sellout is precisely the "item sells out while in cart" bug,
- * so the TTL is a ceiling on staleness, not the only refresh path.
+ * There is deliberately no cache here. An in-process one is cleared only on the
+ * instance that took the sale, so the moment a second API instance exists a
+ * sold-out product keeps showing as available on the others — and the customer
+ * meets that at the pay screen, after choosing to pay. Reading costs about a
+ * millisecond per store (measured with 2,001 stores and 200k stock rows), which
+ * is not worth trading for that.
  *
- * This cache decides what the screen shows, never whether a sale is allowed:
- * reserveStock always locks the real stock row.
+ * Availability shown here is never what authorises a sale: reserveStock locks
+ * the real row inside the transaction.
  */
-const cache = new Map<string, CacheEntry>();
-
-export function invalidateMenuCache(storeId?: string): void {
-  if (storeId) cache.delete(storeId);
-  else cache.clear();
-}
-
-export async function getMenu(storeId: string): Promise<MenuItem[]> {
-  const hit = cache.get(storeId);
-  if (hit && Date.now() - hit.at < config.menuCacheMs) return hit.items;
-
+export async function getMenu(storeId: string): Promise<MenuProduct[]> {
   const { rows } = await pool.query<{
     id: string;
     name: string;
@@ -49,19 +33,17 @@ export async function getMenu(storeId: string): Promise<MenuItem[]> {
     image_url: string | null;
     available: number;
   }>(
-    `SELECT i.id, i.name, i.description, si.price_cents, i.image_url,
+    `SELECT p.id, p.name, p.description, p.price_cents, p.image_url,
             (s.quantity - s.reserved) AS available
-       FROM store_items si
-       JOIN items i ON i.id = si.item_id
-       JOIN stock s ON s.store_id = si.store_id AND s.item_id = si.item_id
-      WHERE si.store_id = $1
-        AND si.active
-        AND i.active
-      ORDER BY i.name`,
+       FROM products p
+       JOIN stock s ON s.store_id = p.store_id AND s.product_id = p.id
+      WHERE p.store_id = $1
+        AND p.active
+      ORDER BY p.name`,
     [storeId],
   );
 
-  const items = rows.map((r) => ({
+  return rows.map((r) => ({
     id: r.id,
     name: r.name,
     description: r.description,
@@ -70,7 +52,4 @@ export async function getMenu(storeId: string): Promise<MenuItem[]> {
     availableQuantity: r.available,
     outOfStock: r.available <= 0,
   }));
-
-  cache.set(storeId, { items, at: Date.now() });
-  return items;
 }

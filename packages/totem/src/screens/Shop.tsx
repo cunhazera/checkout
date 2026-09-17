@@ -1,10 +1,10 @@
-import type { MenuItem } from '../api/types';
+import type { Product } from '../api/types';
 import { formatCents } from '../money';
 import { Art } from '../components/Art';
 import { itemCountLabel, t } from '../i18n';
 
 interface Props {
-  menu: MenuItem[];
+  menu: Product[];
   cart: Record<string, number>;
   itemCount: number;
   totalCents: number;
@@ -12,7 +12,7 @@ interface Props {
   notice: string | null;
   menuError: string | null;
   busy: boolean;
-  onTile: (itemId: string) => void;
+  onTile: (productId: string) => void;
   onEmpty: () => void;
   onReview: () => void;
 }
@@ -48,30 +48,30 @@ export function Shop({
       {notice && <div className="tp-notice">{notice}</div>}
 
       <div className="tp-grid">
-        {menu.map((item) => {
-          const inCart = cart[item.id] ?? 0;
+        {menu.map((product) => {
+          const inCart = cart[product.id] ?? 0;
           // The design has no stock concept; the arch doc's edge-case table
           // requires sold-out items to be visibly unavailable, not hidden.
-          const soldOut = item.outOfStock || inCart >= item.availableQuantity;
+          const soldOut = product.outOfStock || inCart >= product.availableQuantity;
           return (
             <button
-              key={item.id}
+              key={product.id}
               type="button"
               className={`tp-tile${inCart > 0 ? ' is-selected' : ''}`}
-              onClick={() => onTile(item.id)}
+              onClick={() => onTile(product.id)}
               disabled={soldOut}
             >
-              <Art itemId={item.id} className="tp-art" />
-              <div className="tp-tile-name">{item.name}</div>
-              {item.description && <div className="tp-tile-size">{item.description}</div>}
+              <Art productId={product.id} className="tp-art" />
+              <div className="tp-tile-name">{product.name}</div>
+              {product.description && <div className="tp-tile-size">{product.description}</div>}
               <div className="tp-tile-foot">
-                <span className="tp-price">{formatCents(item.priceCents)}</span>
+                <span className="tp-price">{formatCents(product.priceCents)}</span>
                 <span
                   className={`tp-badge${inCart > 0 ? ' is-in-cart' : ''}${
-                    item.outOfStock ? ' is-out' : ''
+                    product.outOfStock ? ' is-out' : ''
                   }`}
                 >
-                  {item.outOfStock
+                  {product.outOfStock
                     ? t('badgeSoldOut')
                     : inCart > 0
                       ? t('badgeInBasket', { n: inCart })

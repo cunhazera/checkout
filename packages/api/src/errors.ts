@@ -15,10 +15,10 @@ export class AppError extends Error {
   }
 }
 
-export const outOfStock = (itemId: string, itemName: string, available: number) =>
-  new AppError(409, 'item_out_of_stock', `${itemName} is no longer available`, {
-    itemId,
-    itemName,
+export const outOfStock = (productId: string, productName: string, available: number) =>
+  new AppError(409, 'product_out_of_stock', `${productName} is no longer available`, {
+    productId,
+    productName,
     available,
   });
 
@@ -37,8 +37,8 @@ export const orderNotPending = (orderId: string, status: string) =>
 export const orderExpired = (orderId: string) =>
   new AppError(410, 'order_expired', 'This order has expired', { orderId });
 
-export const itemUnavailable = (itemId: string) =>
-  new AppError(400, 'item_unavailable', 'Item does not exist or is not for sale', { itemId });
+export const productUnavailable = (productId: string) =>
+  new AppError(400, 'product_unavailable', 'This store does not sell that product', { productId });
 
 /**
  * Too busy to serve this request right now, for one of two reasons: no free

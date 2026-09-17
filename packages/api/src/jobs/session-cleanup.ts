@@ -1,6 +1,5 @@
 import { pool, withTransaction } from '../db/pool.js';
 import { releaseReservations } from '../services/stock.service.js';
-import { invalidateMenuCache } from '../services/menu.service.js';
 
 /**
  * Arch doc: runs every 60 seconds, returning stock held by orders that were
@@ -21,7 +20,6 @@ export async function runSessionCleanup(
   );
 
   const expired: string[] = [];
-  const touchedStores = new Set<string>();
 
   for (const { store_id: storeId, id } of rows) {
     const didExpire = await withTransaction(async (db) => {
@@ -44,14 +42,12 @@ export async function runSessionCleanup(
 
     if (didExpire) {
       expired.push(id);
-      touchedStores.add(storeId);
       // This job silently returning stock is the thing most likely to hide a
       // bug, so every release is logged.
       log(`expired order ${id} at store ${storeId}, reservations released`);
     }
   }
 
-  for (const storeId of touchedStores) invalidateMenuCache(storeId);
   return expired;
 }
 

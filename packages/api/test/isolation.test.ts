@@ -8,7 +8,7 @@ import {
 import {
   placeOrder,
   STORE,
-  ITEM,
+  PRODUCT,
   assertStockInvariant,
   getStock,
   resetDatabase,
@@ -37,12 +37,12 @@ describe('transaction isolation', () => {
   it('rolls back cleanly and does not retry a business-logic failure', async () => {
     resetTransactionRetryCount();
     await expect(
-      placeOrder([{ itemId: ITEM.coffee, quantity: 1 }]),
-    ).rejects.toMatchObject({ code: 'item_out_of_stock' });
+      placeOrder([{ productId: PRODUCT.coffee, quantity: 1 }]),
+    ).rejects.toMatchObject({ code: 'product_out_of_stock' });
 
     // A 409 is a real answer, not contention — replaying it would be pointless.
     expect(getTransactionRetryCount()).toBe(0);
-    expect((await getStock(ITEM.coffee)).reserved).toBe(0);
+    expect((await getStock(PRODUCT.coffee)).reserved).toBe(0);
   });
 
   it('replays a serialization failure instead of surfacing it', async () => {
@@ -85,16 +85,16 @@ describe('transaction isolation', () => {
   });
 
   it('still never oversells under SERIALIZABLE', async () => {
-    await setStock(ITEM.sandwich, 3);
+    await setStock(PRODUCT.sandwich, 3);
 
     const results = await Promise.allSettled(
       Array.from({ length: 12 }, () =>
-        placeOrder([{ itemId: ITEM.sandwich, quantity: 1 }]),
+        placeOrder([{ productId: PRODUCT.sandwich, quantity: 1 }]),
       ),
     );
 
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(3);
-    expect((await getStock(ITEM.sandwich)).reserved).toBe(3);
+    expect((await getStock(PRODUCT.sandwich)).reserved).toBe(3);
     await assertStockInvariant();
   });
 });

@@ -6,7 +6,7 @@ import { AppError } from '../src/errors.js';
 import {
   placeOrder,
   STORE,
-  ITEM,
+  PRODUCT,
   assertStockInvariant,
   getStock,
   resetDatabase,
@@ -30,15 +30,15 @@ describe('menu', () => {
   it('lists active items with availability', async () => {
     const items = await getMenu(STORE.main);
     expect(items).toHaveLength(9);
-    const coffee = items.find((i) => i.id === ITEM.coffee)!;
+    const coffee = items.find((i) => i.id === PRODUCT.coffee)!;
     expect(coffee.availableQuantity).toBe(0);
     expect(coffee.outOfStock).toBe(true);
   });
 
   it('reflects a reservation in available quantity', async () => {
-    const before = (await getMenu(STORE.main)).find((i) => i.id === ITEM.chips)!;
-    await placeOrder([{ itemId: ITEM.chips, quantity: 2 }]);
-    const after = (await getMenu(STORE.main)).find((i) => i.id === ITEM.chips)!;
+    const before = (await getMenu(STORE.main)).find((i) => i.id === PRODUCT.chips)!;
+    await placeOrder([{ productId: PRODUCT.chips, quantity: 2 }]);
+    const after = (await getMenu(STORE.main)).find((i) => i.id === PRODUCT.chips)!;
     expect(after.availableQuantity).toBe(before.availableQuantity - 2);
   });
 });
@@ -46,8 +46,8 @@ describe('menu', () => {
 describe('createOrder', () => {
   it('reserves stock and snapshots prices', async () => {
     const order = await placeOrder([
-      { itemId: ITEM.chips, quantity: 2 },
-      { itemId: ITEM.cola, quantity: 1 },
+      { productId: PRODUCT.chips, quantity: 2 },
+      { productId: PRODUCT.cola, quantity: 1 },
     ]);
 
     expect(order.status).toBe('pending');
@@ -55,7 +55,7 @@ describe('createOrder', () => {
     expect(order.subtotalCents).toBe(690);
     expect(order.totalCents).toBe(690);
 
-    const chips = await getStock(ITEM.chips);
+    const chips = await getStock(PRODUCT.chips);
     expect(chips.reserved).toBe(2);
     expect(chips.quantity).toBe(24); // physical count untouched until payment
     await assertStockInvariant();
@@ -63,54 +63,54 @@ describe('createOrder', () => {
 
   it('rejects an order for a sold-out item without reserving anything', async () => {
     await expect(
-      placeOrder([{ itemId: ITEM.coffee, quantity: 1 }]),
-    ).rejects.toMatchObject({ code: 'item_out_of_stock' });
+      placeOrder([{ productId: PRODUCT.coffee, quantity: 1 }]),
+    ).rejects.toMatchObject({ code: 'product_out_of_stock' });
 
-    expect((await getStock(ITEM.coffee)).reserved).toBe(0);
+    expect((await getStock(PRODUCT.coffee)).reserved).toBe(0);
   });
 
   it('leaves no partial reservation when a later line fails', async () => {
     await expect(
       placeOrder([
-        { itemId: ITEM.chips, quantity: 2 },
-        { itemId: ITEM.coffee, quantity: 1 },
+        { productId: PRODUCT.chips, quantity: 2 },
+        { productId: PRODUCT.coffee, quantity: 1 },
       ]),
     ).rejects.toThrow(AppError);
 
     // The whole transaction rolled back, including the chips reservation.
-    expect((await getStock(ITEM.chips)).reserved).toBe(0);
+    expect((await getStock(PRODUCT.chips)).reserved).toBe(0);
     await assertStockInvariant();
   });
 
   it('rejects unknown and inactive items', async () => {
     await expect(
       placeOrder([
-        { itemId: '22222222-2222-4222-8222-000000000000', quantity: 1 },
+        { productId: '22222222-2222-4222-8222-000000000000', quantity: 1 },
       ]),
-    ).rejects.toMatchObject({ code: 'item_unavailable' });
+    ).rejects.toMatchObject({ code: 'product_unavailable' });
   });
 
   it('rejects duplicate lines for the same item', async () => {
     await expect(
       placeOrder([
-        { itemId: ITEM.chips, quantity: 1 },
-        { itemId: ITEM.chips, quantity: 1 },
+        { productId: PRODUCT.chips, quantity: 1 },
+        { productId: PRODUCT.chips, quantity: 1 },
       ]),
     ).rejects.toMatchObject({ code: 'bad_request' });
   });
 
   it('rejects empty orders and non-positive quantities', async () => {
     await expect(placeOrder([])).rejects.toMatchObject({ code: 'bad_request' });
-    await expect(placeOrder([{ itemId: ITEM.chips, quantity: 0 }])).rejects.toMatchObject({
+    await expect(placeOrder([{ productId: PRODUCT.chips, quantity: 0 }])).rejects.toMatchObject({
       code: 'bad_request',
     });
   });
 
   it('keeps the price the customer saw even if the catalog changes later', async () => {
     const order = await placeOrder([
-      { itemId: ITEM.chips, quantity: 1 },
+      { productId: PRODUCT.chips, quantity: 1 },
     ]);
-    await setStock(ITEM.chips, 24, 1);
+    await setStock(PRODUCT.chips, 24, 1);
     const reread = await getOrder(STORE.main, order.id);
     expect(reread.items[0]!.unitPriceCents).toBe(240);
   });
@@ -119,23 +119,23 @@ describe('createOrder', () => {
 describe('abandonOrder', () => {
   it('releases reservations and cancels', async () => {
     const order = await placeOrder([
-      { itemId: ITEM.chips, quantity: 3 },
+      { productId: PRODUCT.chips, quantity: 3 },
     ]);
-    expect((await getStock(ITEM.chips)).reserved).toBe(3);
+    expect((await getStock(PRODUCT.chips)).reserved).toBe(3);
 
     const { status } = await cancelOrder(STORE.main, order.id);
     expect(status).toBe('cancelled');
-    expect((await getStock(ITEM.chips)).reserved).toBe(0);
+    expect((await getStock(PRODUCT.chips)).reserved).toBe(0);
     await assertStockInvariant();
   });
 
   it('is idempotent — abandoning twice does not double-release', async () => {
     const order = await placeOrder([
-      { itemId: ITEM.chips, quantity: 3 },
+      { productId: PRODUCT.chips, quantity: 3 },
     ]);
     await cancelOrder(STORE.main, order.id);
     await cancelOrder(STORE.main, order.id);
-    expect((await getStock(ITEM.chips)).reserved).toBe(0);
+    expect((await getStock(PRODUCT.chips)).reserved).toBe(0);
     await assertStockInvariant();
   });
 });

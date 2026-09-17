@@ -29,11 +29,11 @@ export class ApiError extends Error {
     this.name = 'ApiError';
   }
 
-  get itemName(): string | undefined {
-    return typeof this.details.itemName === 'string' ? this.details.itemName : undefined;
+  get productName(): string | undefined {
+    return typeof this.details.productName === 'string' ? this.details.productName : undefined;
   }
-  get itemId(): string | undefined {
-    return typeof this.details.itemId === 'string' ? this.details.itemId : undefined;
+  get productId(): string | undefined {
+    return typeof this.details.productId === 'string' ? this.details.productId : undefined;
   }
 }
 
@@ -79,7 +79,7 @@ export const api = {
 
   startSession: () => request<Session>('/sessions', { method: 'POST' }),
 
-  createOrder: (sessionId: string, items: { itemId: string; quantity: number }[]) =>
+  createOrder: (sessionId: string, items: { productId: string; quantity: number }[]) =>
     request<Order>('/orders', {
       method: 'POST',
       body: JSON.stringify({ sessionId, totemId: TOTEM_ID, items }),
