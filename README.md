@@ -112,6 +112,33 @@ assume failure.
 
 Full scenario list and what each should do: **[PAYMENT_TESTING.md](PAYMENT_TESTING.md)**.
 
+## Running it in containers
+
+```bash
+docker compose -f docker-compose.prod.yml up --build -d
+docker compose -f docker-compose.prod.yml exec api node packages/api/dist/db/migrate.js
+docker compose -f docker-compose.prod.yml exec api node packages/api/dist/db/seed.js
+```
+
+The totem is then on <http://127.0.0.1:8080>, served by nginx, which also
+proxies `/api` to the API container so the browser sees one origin.
+
+This is not a production deployment — no TLS, no secret management, no backups —
+but it is a real one: the API runs compiled JavaScript with production
+dependencies only, as a non-root user, and receives SIGTERM directly so a
+payment in flight finishes instead of being cut off.
+
+**A totem's identity is not in the image.** Each device reads `/totem.json` at
+startup, which provisioning writes per device:
+
+```json
+{ "storeId": "a0000000-…-000000000001", "totemId": "b0000000-…-000000000001" }
+```
+
+Cloning one disk image across a fleet would otherwise give every screen the same
+id, and duplicate ids are indistinguishable from real ones. A device with no
+valid file shows an out-of-service screen rather than guessing a store.
+
 ## Testing
 
 ```bash
@@ -207,8 +234,8 @@ will reset whatever demo data you were looking at.
 
 ## Not built yet
 
-Honest list: no authentication or TLS (the API binds to localhost only, and the
-architecture doc explains when that stops being enough), no real card reader, no
-refund path, no restocking (stock.quantity is updated by hand), no receipt QR,
-and no admin surface for entering a store's products. Tax is configured at 0 for
-both demo stores.
+Honest list: no authentication or TLS (the architecture doc explains when that
+stops being enough), no real card reader, no refund path, no restocking
+(`stock.quantity` is updated by hand), no receipt QR, no admin surface for
+opening a store or entering its products, and no backups or metrics. Tax is
+configured at 0 for both demo stores.

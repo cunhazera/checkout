@@ -533,3 +533,28 @@ premortem. Implemented in full.
   products at BRL prices, not translations of the other store's rows.
 - 148 tests passing; verified end to end in the browser, including a store
   rejecting another store's product id.
+
+### 2026-09-17 — the four gaps from the second review
+- **Out-of-service screen.** With the API unreachable, tapping the totem used to
+  do *nothing*: the error was written to state only the product grid rendered,
+  and the grid is never reached from the welcome screen. There is now a screen
+  that says so, it covers the unprovisioned device too, and the totem retries
+  every 5s and comes back on its own.
+- **Runtime totem identity.** `src/identity.ts` reads `/totem.json` at startup
+  instead of the build baking in `VITE_STORE_ID`. Imaging a fleet would have
+  given every device the same `totem_id`. The spec had said this since the
+  premortem; the code now matches it.
+- **Container images.** Dockerfiles for the API (compiled output, production
+  deps, non-root, SIGTERM to PID 1), the totem (nginx, `/totem.json` served
+  `no-store`, `/api` proxied with a 120s read timeout for the payment window),
+  and the mock gateway, plus `docker-compose.prod.yml`. Verified by buying
+  something with the whole system in containers.
+- **Accessibility.** Product tiles carry a full label (name, size, price, sold
+  out, quantity in basket); the status line, stepper count, payment spinner and
+  result screen announce politely; both modals are dialogs; decorative art and
+  the QR are hidden from screen readers; the welcome screen is keyboard
+  operable; `<html lang>` follows the store's locale; animation respects
+  `prefers-reduced-motion`. A public kiosk has legal requirements here
+  (EN 301 549, ADA), so this is not polish.
+- 11 new totem tests (33 total, 159 across the project). A build-only tsconfig
+  keeps tests — which import the mock gateway — out of the production image.

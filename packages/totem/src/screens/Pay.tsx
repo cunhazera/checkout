@@ -33,8 +33,8 @@ export function Pay({
   // reconciliation. The screen is non-dismissible while that runs.
   if (busy) {
     return (
-      <div className="tp-screen tp-pay">
-        <div className="tp-spinner" />
+      <div className="tp-screen tp-pay" role="status" aria-live="assertive">
+        <div className="tp-spinner" aria-hidden="true" />
         <h2 className="tp-amount-value" style={{ fontSize: 72 }}>
           {t('confirmingPayment')}
         </h2>
@@ -58,7 +58,7 @@ export function Pay({
 
       {notice && <div className="tp-notice tp-notice-bad">{notice}</div>}
 
-      <div className="tp-methods-list">
+      <div className="tp-methods-list" role="radiogroup" aria-label={t('chooseHowToPay')}>
         <div className="tp-methods-label">{t('chooseHowToPay')}</div>
         {METHODS.map((m) => (
           <button
@@ -66,8 +66,11 @@ export function Pay({
             type="button"
             className={`tp-method${method === m.id ? ' is-selected' : ''}`}
             onClick={() => onMethod(m.id)}
+            role="radio"
+            aria-checked={method === m.id}
+            aria-label={`${m.name()}, ${m.note()}`}
           >
-            <span className="tp-dot" />
+            <span className="tp-dot" aria-hidden="true" />
             <span className="tp-method-name">{m.name()}</span>
             <span className="tp-method-note">{m.note()}</span>
           </button>

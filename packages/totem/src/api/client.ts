@@ -1,18 +1,8 @@
+import { getIdentity } from '../identity';
 import type { Menu, Order, PayResult, PaymentMethod, Session, Store } from './types';
 
-/**
- * Which store and totem this device is. Provisioned per device at install time
- * through build-time env vars for now; the defaults are the seeded LOCAL-0001
- * store and its totem T1.
- *
- * Later this identity comes from the device's own credential (a per-totem
- * certificate), and the server derives the store from it instead of trusting
- * the URL. The URLs stay the same.
- */
-export const STORE_ID: string = import.meta.env.VITE_STORE_ID ?? 'a0000000-0000-4000-8000-000000000001';
-export const TOTEM_ID: string = import.meta.env.VITE_TOTEM_ID ?? 'b0000000-0000-4000-8000-000000000001';
-
-const BASE = `/api/v1/stores/${STORE_ID}`;
+/** Every call is scoped to the store this device belongs to. */
+const base = () => `/api/v1/stores/${getIdentity().storeId}`;
 
 /**
  * Carries the API's machine-readable `code`. The design's edge-case table wants
@@ -40,7 +30,7 @@ export class ApiError extends Error {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(`${BASE}${path}`, {
+    res = await fetch(`${base()}${path}`, {
       ...init,
       // Only declare a JSON body when there actually is one. Sending
       // content-type: application/json with an empty body makes Fastify reject
@@ -82,7 +72,7 @@ export const api = {
   createOrder: (sessionId: string, items: { productId: string; quantity: number }[]) =>
     request<Order>('/orders', {
       method: 'POST',
-      body: JSON.stringify({ sessionId, totemId: TOTEM_ID, items }),
+      body: JSON.stringify({ sessionId, totemId: getIdentity().totemId, items }),
     }),
 
   getOrder: (orderId: string) => request<Order>(`/orders/${orderId}`),

@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
+import { loadIdentity } from './identity';
 import { useSession } from './state/session';
 import { Welcome } from './screens/Welcome';
 import { Shop } from './screens/Shop';
 import { Review } from './screens/Review';
 import { Pay } from './screens/Pay';
 import { Done } from './screens/Done';
+import { OutOfService } from './screens/OutOfService';
 import { ConfirmSheet } from './components/ConfirmSheet';
 import { t } from './i18n';
 
@@ -21,7 +23,36 @@ function useCanvasScale() {
   return scale;
 }
 
+/**
+ * Nothing may call the API until the device knows which store it is, so the
+ * identity is resolved before the checkout is mounted at all. A totem with no
+ * identity says so rather than guessing a store — serving the wrong store's
+ * prices would be worse than serving nothing.
+ */
 export default function App() {
+  const [identity, setIdentity] = useState<'loading' | 'ready' | 'missing'>('loading');
+  const scale = useCanvasScale();
+
+  useEffect(() => {
+    void loadIdentity().then((found) => setIdentity(found ? 'ready' : 'missing'));
+  }, []);
+
+  if (identity === 'loading') return <div className="tp-viewport" />;
+
+  if (identity === 'missing') {
+    return (
+      <div className="tp-viewport">
+        <div className="tp-canvas" style={{ transform: `translate(-50%, -50%) scale(${scale})` }}>
+          <OutOfService reason="unprovisioned" />
+        </div>
+      </div>
+    );
+  }
+
+  return <Checkout />;
+}
+
+function Checkout() {
   const s = useSession();
   const scale = useCanvasScale();
   const a = s.actions;
@@ -33,9 +64,13 @@ export default function App() {
         style={{ transform: `translate(-50%, -50%) scale(${scale})` }}
         onPointerDown={a.touch}
       >
-        {s.screen === 'welcome' && <Welcome onStart={() => void a.start()} />}
+        {/* Takes over the screen: a customer who cannot be served must be
+            told, not left tapping a display that looks alive. */}
+        {s.serviceDown && <OutOfService reason="unreachable" />}
 
-        {s.screen === 'shop' && (
+        {!s.serviceDown && s.screen === 'welcome' && <Welcome onStart={() => void a.start()} />}
+
+        {!s.serviceDown && s.screen === 'shop' && (
           <Shop
             menu={s.menu}
             cart={s.cart}
@@ -51,7 +86,7 @@ export default function App() {
           />
         )}
 
-        {s.screen === 'review' && (
+        {!s.serviceDown && s.screen === 'review' && (
           <Review
             lines={s.lines}
             totals={s.totals}
@@ -64,7 +99,7 @@ export default function App() {
           />
         )}
 
-        {s.screen === 'pay' && (
+        {!s.serviceDown && s.screen === 'pay' && (
           <Pay
             totalCents={s.totals.totalCents}
             itemCount={s.itemCount}
@@ -77,7 +112,7 @@ export default function App() {
           />
         )}
 
-        {s.screen === 'done' && (
+        {!s.serviceDown && s.screen === 'done' && (
           <Done
             result={s.result}
             amountCents={s.totals.totalCents}
@@ -90,7 +125,7 @@ export default function App() {
         )}
 
         {/* Overlay: the grid stays mounted underneath. */}
-        {s.pending && (
+        {!s.serviceDown && s.pending && (
           <ConfirmSheet
             product={s.pending}
             quantity={s.pendingQty}
@@ -101,10 +136,17 @@ export default function App() {
           />
         )}
 
-        {s.idlePrompt && (
+        {!s.serviceDown && s.idlePrompt && (
           <div className="tp-overlay">
-            <div className="tp-modal">
-              <h3 className="tp-modal-title">{t('stillThere')}</h3>
+            <div
+              className="tp-modal"
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="idle-title"
+            >
+              <h3 className="tp-modal-title" id="idle-title">
+                {t('stillThere')}
+              </h3>
               <p className="tp-modal-body">{t('stillThereBody')}</p>
               <button type="button" className="btn btn-primary" onClick={a.touch}>
                 {t('imStillHere')}

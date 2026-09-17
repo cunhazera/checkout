@@ -31,11 +31,19 @@ export function ConfirmSheet({
 
   return (
     <div className="tp-backdrop" onClick={onCancel}>
-      <div className="tp-sheet" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="tp-sheet"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="confirm-product"
+      >
         <div className="tp-sheet-head">
           <Art productId={product.id} className="tp-sheet-art tp-art" />
           <div className="tp-sheet-info">
-            <div className="tp-sheet-name">{product.name}</div>
+            <div className="tp-sheet-name" id="confirm-product">
+              {product.name}
+            </div>
             {product.description && <div className="tp-sheet-size">{product.description}</div>}
             <div className="tp-sheet-price">{formatCents(product.priceCents)}</div>
           </div>

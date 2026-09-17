@@ -34,8 +34,8 @@ export function Done({
       : (failureMessage ?? t('declinedBody'));
 
   return (
-    <div className="tp-screen tp-done">
-      <div className={`tp-disc ${success ? 'tp-disc-ok' : 'tp-disc-bad'}`}>
+    <div className="tp-screen tp-done" role="status" aria-live="polite">
+      <div className={`tp-disc ${success ? 'tp-disc-ok' : 'tp-disc-bad'}`} aria-hidden="true">
         <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.75} strokeLinecap="round" strokeLinejoin="round">
           {success ? <path d="M4 12.5l5.5 5.5L20 6.5" /> : <path d="M6 6l12 12M18 6L6 18" />}
         </svg>
@@ -50,7 +50,7 @@ export function Done({
 
       {success && (
         <div className="tp-receipt">
-          <div className="tp-qr">
+          <div className="tp-qr" aria-hidden="true">
             {/* Stand-in for a generated QR pointing at the receipt URL. */}
             <svg viewBox="0 0 24 24" fill="var(--color-neutral-100)">
               <path d="M3 3h7v7H3V3zm2 2v3h3V5H5zM14 3h7v7h-7V3zm2 2v3h3V5h-3zM3 14h7v7H3v-7zm2 2v3h3v-3H5zM14 14h3v3h-3v-3zM18 14h3v3h-3v-3zM14 18h3v3h-3v-3zM18 18h3v3h-3v-3z" />

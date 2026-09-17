@@ -160,10 +160,12 @@ are indistinguishable from legitimate rows — `totems UNIQUE (store_id, label)`
 does not catch them. Per-totem attribution, "which screen is jamming?", and
 per-device reconciliation all die quietly at that point.
 
-So the totem reads its identity **at runtime**, from device-local
-configuration that provisioning writes after the image is laid down (and, from
-Phase 1, from the device certificate, which is issued per device and cannot be
-cloned usefully).
+So the totem reads its identity **at runtime** from `/totem.json`, which
+provisioning writes after the image is laid down (and, from Phase 1, from the
+device certificate, which is issued per device and cannot be cloned usefully).
+Implemented: `src/identity.ts` loads it with `cache: no-store`, validates both
+ids as UUIDs, and a device with neither shows the out-of-service screen rather
+than guessing a store. nginx serves that file `no-store` for the same reason.
 
 The build-time `VITE_STORE_ID` / `VITE_TOTEM_ID` variables are a **development
 convenience only**, defaulting to the seeded `LOCAL-0001` store and its totem
@@ -386,7 +388,7 @@ From a premortem on 2026-09-17. Each of these changed a requirement above.
 
 | Risk | What it would have cost | Change it caused |
 |---|---|---|
-| **Totem identity baked into the build.** Fleets are provisioned by imaging one disk; anything compiled in is duplicated across every device, and duplicate `totem_id`s look like legitimate rows. | Per-device attribution and reconciliation become impossible, silently. | "Totem provisioning" now requires identity at **runtime** from device-local config or the device certificate; production builds must refuse to embed it; duplicate ids in use at once are an alert. |
+| **Totem identity baked into the build.** Fleets are provisioned by imaging one disk; anything compiled in is duplicated across every device, and duplicate `totem_id`s look like legitimate rows. | Per-device attribution and reconciliation become impossible, silently. | **Implemented:** identity is read at runtime from `/totem.json`; the `VITE_*` variables work only in development and the production image sets none. Duplicate ids in use at once remain an alert to build. |
 | **Tax defaulting to zero.** Stores are opened by copying the previous `INSERT`, so a silent `0` spreads. | Months of orders with `tax_cents = 0`, discovered at quarter close; a fiscal-receipt requirement discovered at a border. | `stores.tax_basis_points` now has **no default** (enforced in `001_init.sql`); zero must be chosen. Fiscal receipts are a per-country launch blocker. |
 | **`items.active` was a global switch** that looked like the per-store one. | Withdrawing a product from one region would remove it from every store in the country, mid-basket. | First mitigated with a rule ("refused while any store still lists it"), then removed entirely: products are store-owned, so **no global switch exists to misuse**. A constraint nobody can break beat a rule somebody had to remember. |
 | **Per-instance menu cache** invalidated only on the instance that took the sale. | With N instances, sold-out items linger on N-1; the pay-screen 409 goes from rare to routine, met *after* the customer commits. | The cache was **deleted**. Availability is read from the database on every menu request — measured at about a millisecond per store with 2,001 stores, which is not worth trading for staleness. |

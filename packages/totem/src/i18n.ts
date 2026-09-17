@@ -102,6 +102,12 @@ const en = {
   nothingWasCharged: 'The payment was not accepted. Nothing was charged.',
   cannotStart: 'Cannot start a session. Please ask staff for help.',
   menuUnavailable: 'Menu unavailable',
+
+  outOfService: 'Out of service',
+  outOfServiceBody:
+    'This totem cannot take orders right now. Please ask a member of staff, or use another totem.',
+  outOfServiceUnprovisioned:
+    'This totem has not been set up yet. Please ask a member of staff.',
 } as const;
 
 type Key = keyof typeof en;
@@ -186,6 +192,11 @@ const pt: Record<Key, string> = {
   nothingWasCharged: 'O pagamento não foi aceito. Nada foi cobrado.',
   cannotStart: 'Não foi possível iniciar. Peça ajuda a um atendente.',
   menuUnavailable: 'Cardápio indisponível',
+
+  outOfService: 'Fora de serviço',
+  outOfServiceBody:
+    'Este totem não consegue registrar pedidos agora. Procure um atendente ou use outro totem.',
+  outOfServiceUnprovisioned: 'Este totem ainda não foi configurado. Procure um atendente.',
 };
 
 const dictionaries: Record<Lang, Record<Key, string>> = { en, pt };

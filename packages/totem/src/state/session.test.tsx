@@ -96,6 +96,58 @@ async function withBasket(lines: [string, number][] = [['chips', 2]]) {
   return view;
 }
 
+describe('when the totem cannot reach the API', () => {
+  it('goes out of service rather than leaving the customer tapping', async () => {
+    // The bug this guards: the error used to be written to state that only the
+    // product grid rendered, and the grid is never reached from the welcome
+    // screen. Tapping a dead totem did nothing at all.
+    api.getStore.mockRejectedValue(new ApiError(0, 'network_error', 'Cannot reach the checkout service'));
+    api.getMenu.mockRejectedValue(new ApiError(0, 'network_error', 'Cannot reach the checkout service'));
+
+    const { result } = renderHook(() => useSession());
+
+    await waitFor(() => expect(result.current.serviceDown).toBe(true));
+  });
+
+  it('comes back on its own when the API returns', async () => {
+    // Fake timers from the start: the retry interval is created the moment the
+    // totem goes down, so it has to be a fake one to be advanced later.
+    vi.useFakeTimers();
+    try {
+      api.getStore.mockRejectedValue(new ApiError(0, 'network_error', 'offline'));
+      api.getMenu.mockRejectedValue(new ApiError(0, 'network_error', 'offline'));
+
+      const { result } = renderHook(() => useSession());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0); // let the mount's requests settle
+      });
+      expect(result.current.serviceDown).toBe(true);
+
+      api.getStore.mockResolvedValue(STORE);
+      api.getMenu.mockResolvedValue(MENU);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_000);
+      });
+
+      // A totem that fixes itself beats one that needs a member of staff.
+      expect(result.current.serviceDown).toBe(false);
+      expect(result.current.menu).toHaveLength(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not go out of service for an ordinary error', async () => {
+    // A 500 from a reachable API is a different problem: the totem stays up.
+    api.getMenu.mockRejectedValue(new ApiError(500, 'internal_error', 'boom'));
+    const { result } = renderHook(() => useSession());
+
+    await waitFor(() => expect(result.current.menuError).toBe('boom'));
+    expect(result.current.serviceDown).toBe(false);
+  });
+});
+
 describe('the basket', () => {
   it('adds an item and totals it', async () => {
     const { result } = await withBasket();

@@ -23,6 +23,12 @@ export function useSession() {
   const [store, setStore] = useState<Store | null>(null);
   const [menu, setMenu] = useState<Product[]>([]);
   const [menuError, setMenuError] = useState<string | null>(null);
+  /**
+   * The totem cannot reach the API. Kept separate from menuError: this takes
+   * over the whole screen rather than showing a line above the grid, because a
+   * customer who cannot be served needs to be told, not left tapping.
+   */
+  const [serviceDown, setServiceDown] = useState(false);
 
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [cart, setCart] = useState<Record<string, number>>({});
@@ -59,12 +65,37 @@ export function useSession() {
         configureMoney({ currency: st.currency, locale: st.locale });
         // Words and money come from the same place: the store's locale.
         configureLanguage(st.locale);
+        // Otherwise a screen reader announces Portuguese in an English voice.
+        document.documentElement.lang = st.locale;
       })
-      .catch(() => {
-        /* fall back to the built-in USD default */
+      .catch((err) => {
+        // Without the store there is no currency, tax or language: better to
+        // say so than to render a screen in the wrong money.
+        if (err instanceof ApiError && err.code === 'network_error') setServiceDown(true);
       });
     void refreshMenu();
   }, [refreshMenu]);
+
+  // While out of service, keep trying: a totem that fixes itself when the
+  // network returns is worth more than one that needs a member of staff.
+  useEffect(() => {
+    if (!serviceDown) return;
+    const t = setInterval(() => {
+      void api
+        .getStore()
+        .then((st) => {
+          setStore(st);
+          configureMoney({ currency: st.currency, locale: st.locale });
+          configureLanguage(st.locale);
+        // Otherwise a screen reader announces Portuguese in an English voice.
+        document.documentElement.lang = st.locale;
+          setServiceDown(false);
+          void refreshMenu();
+        })
+        .catch(() => undefined);
+    }, 5_000);
+    return () => clearInterval(t);
+  }, [serviceDown, refreshMenu]);
 
   // Keep availability live while browsing — the design wants sold-out items to
   // go unavailable in real time.
@@ -131,8 +162,9 @@ export function useSession() {
       setSessionId(session.sessionId);
       setScreen('shop');
       void refreshMenu();
-    } catch {
-      setMenuError(t('cannotStart'));
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'network_error') setServiceDown(true);
+      else setMenuError(t('cannotStart'));
     }
   }, [refreshMenu]);
 
@@ -314,6 +346,7 @@ export function useSession() {
     failureMessage,
     supportReference,
     idlePrompt,
+    serviceDown,
     actions: {
       start,
       touch,

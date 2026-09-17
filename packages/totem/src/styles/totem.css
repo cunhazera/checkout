@@ -300,3 +300,18 @@ body {
   animation: tp-spin 1s linear infinite; margin: 0 auto;
 }
 @keyframes tp-spin { to { transform: rotate(360deg); } }
+
+/* Some people get motion sickness from looping animation, and a kiosk gives
+   them no way to turn it off. Honour the system setting. */
+@media (prefers-reduced-motion: reduce) {
+  .tp-pulse,
+  .tp-spinner,
+  .tp-done-title {
+    animation: none !important;
+  }
+  .tp-tile:active,
+  .tp-step:active,
+  .tp-method:active {
+    transform: none;
+  }
+}

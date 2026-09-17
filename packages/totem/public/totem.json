@@ -1,0 +1,5 @@
+{
+  "_comment": "Device identity. Provisioning writes this per totem, after imaging. Never bake these into the bundle: a cloned image would duplicate them across every device.",
+  "storeId": "a0000000-0000-4000-8000-000000000001",
+  "totemId": "b0000000-0000-4000-8000-000000000001"
+}

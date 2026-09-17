@@ -21,7 +21,9 @@ export function Stepper({ value, onChange, min = 1, max }: Props) {
       >
         −
       </button>
-      <span className="tp-count">{value}</span>
+      <span className="tp-count" role="status" aria-live="polite">
+        {value}
+      </span>
       <button
         type="button"
         className="tp-step tp-step-plus"

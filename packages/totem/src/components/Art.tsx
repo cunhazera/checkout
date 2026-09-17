@@ -8,7 +8,7 @@ import { artFor } from '../data/presentation';
 export function Art({ productId, className }: { productId: string; className: string }) {
   const art = artFor(productId);
   return (
-    <div className={`${className} tp-art-${art.palette}`}>
+    <div className={`${className} tp-art-${art.palette}`} aria-hidden="true">
       <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
         <path d={art.p1} />
         <path d={art.p2} />

@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "noEmit": false
+  },
+  // Tests are excluded deliberately: they import the mock gateway, which is a
+  // dev dependency and must never be part of a production image.
+  "include": ["src"]
+}

@@ -41,7 +41,11 @@ export function Shop({
 
       <div className="tp-subrow">
         <span>{t('shopHint')}</span>
-        <span className="tp-status">{status}</span>
+        {/* Announced without stealing focus: the customer hears "X added"
+            while their eyes are still on the grid. */}
+        <span className="tp-status" role="status" aria-live="polite">
+          {status}
+        </span>
       </div>
 
       {menuError && <div className="tp-notice tp-notice-bad">{menuError}</div>}
@@ -60,6 +64,15 @@ export function Shop({
               className={`tp-tile${inCart > 0 ? ' is-selected' : ''}`}
               onClick={() => onTile(product.id)}
               disabled={soldOut}
+              aria-label={[
+                product.name,
+                product.description,
+                formatCents(product.priceCents),
+                product.outOfStock ? t('badgeSoldOut') : null,
+                inCart > 0 ? t('badgeInBasket', { n: inCart }) : null,
+              ]
+                .filter(Boolean)
+                .join(', ')}
             >
               <Art productId={product.id} className="tp-art" />
               <div className="tp-tile-name">{product.name}</div>
