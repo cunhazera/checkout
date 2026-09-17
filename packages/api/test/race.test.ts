@@ -3,12 +3,13 @@ import { closePool, pool } from '../src/db/pool.js';
 import { payOrder, setTerminal } from '../src/services/payment.service.js';
 import { FakeTerminal } from '../src/ports/fake-terminal.js';
 import {
-  placeOrder,
-  STORE,
   PRODUCT,
+  STORE,
   assertStockInvariant,
   getOrderStatus,
   getStock,
+  placeOrder,
+  registerTotems,
   resetDatabase,
   setStock,
   setupDatabase,
@@ -54,9 +55,10 @@ describe('two customers, one unit left', () => {
   it('simultaneous: exactly one customer gets to pay, the other is denied', async () => {
     await setStock(PRODUCT.sandwich, 1);
 
+    const totems = await registerTotems(2);
     const [a, b] = await Promise.allSettled([
-      placeOrder([{ productId: PRODUCT.sandwich, quantity: 1 }]),
-      placeOrder([{ productId: PRODUCT.sandwich, quantity: 1 }]),
+      placeOrder([{ productId: PRODUCT.sandwich, quantity: 1 }], { totem: totems[0]! }),
+      placeOrder([{ productId: PRODUCT.sandwich, quantity: 1 }], { totem: totems[1]! }),
     ]);
 
     const winners = [a, b].filter((r) => r.status === 'fulfilled');
@@ -80,14 +82,17 @@ describe('two customers, one unit left', () => {
 
   it('the denied customer can buy it if the winner fails to pay', async () => {
     await setStock(PRODUCT.sandwich, 1);
+    // Two customers, so two screens: the same screen starting a second order
+    // would close its own first one rather than compete with it.
+    const totems = await registerTotems(2);
 
-    const a = await placeOrder([
-      { productId: PRODUCT.sandwich, quantity: 1 },
-    ]);
+    const a = await placeOrder([{ productId: PRODUCT.sandwich, quantity: 1 }], {
+      totem: totems[0]!,
+    });
 
     // B is denied while A holds the reservation.
     await expect(
-      placeOrder([{ productId: PRODUCT.sandwich, quantity: 1 }]),
+      placeOrder([{ productId: PRODUCT.sandwich, quantity: 1 }], { totem: totems[1]! }),
     ).rejects.toMatchObject({ code: 'product_out_of_stock' });
 
     // A's card is declined, which returns the unit to the shelf.
@@ -97,9 +102,9 @@ describe('two customers, one unit left', () => {
 
     // Now B can buy it.
     terminal.setMode('approve');
-    const b = await placeOrder([
-      { productId: PRODUCT.sandwich, quantity: 1 },
-    ]);
+    const b = await placeOrder([{ productId: PRODUCT.sandwich, quantity: 1 }], {
+      totem: totems[1]!,
+    });
     expect((await payOrder(STORE.main, b.id, 'card')).status).toBe('succeeded');
     expect((await getStock(PRODUCT.sandwich)).quantity).toBe(0);
     await assertStockInvariant();

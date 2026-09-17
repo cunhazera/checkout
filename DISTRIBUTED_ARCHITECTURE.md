@@ -109,8 +109,7 @@ All store operations now live under `/v1/stores/:storeId`.
 | `GET /health` | `GET /health` | process + database liveness |
 | `GET /config` | `GET /v1/stores/:storeId` | currency, locale, tax come from the store |
 | `GET /menu` | `GET /v1/stores/:storeId/menu` | response now includes `currency` |
-| `POST /session/start` | `POST /v1/stores/:storeId/sessions` | 201 |
-| `POST /orders` | `POST /v1/stores/:storeId/orders` | body now requires `totemId` |
+| `POST /orders` | `POST /v1/stores/:storeId/orders` | body requires `totemId`; sessions are gone (see below) |
 | `GET /orders/:orderId` | `GET /v1/stores/:storeId/orders/:orderId` | another store's order is 404 |
 | `POST /orders/:orderId/pay` | `POST /v1/stores/:storeId/orders/:orderId/payments` | **201** for every attempt; `status` says the outcome |
 | `DELETE /orders/:orderId/abandon` | `POST /v1/stores/:storeId/orders/:orderId/cancel` | orders are never deleted |
@@ -119,6 +118,20 @@ All store operations now live under `/v1/stores/:storeId`.
 
 The old routes are removed. The totem is the only client and was updated in the
 same change.
+
+**Sessions were removed.** The original design issued a session id when a
+customer approached the totem. Nothing ever read it: expiry is driven by
+`orders.expires_at`, and the totem's inactivity timer cancels the order
+directly. It was a required field, a round trip and an index for a value the
+client invented and the server never used.
+
+What replaced it is an invariant worth having: **a totem may have one open order
+at a time.** Creating an order cancels that screen's previous unpaid basket, so
+a customer who walks away no longer holds stock for the full TTL while the next
+person is told "sold out". An order in `confirmed` is the exception — a payment
+is in flight and the card may already be charged, so the new order is refused
+with `payment_in_flight` rather than releasing stock that may have been sold.
+Orders remain anonymous: a totem identifies a screen, never a person.
 
 Conventions:
 

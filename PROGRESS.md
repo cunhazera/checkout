@@ -53,7 +53,6 @@ routes is in `DISTRIBUTED_ARCHITECTURE.md`.
 | `GET` | `/health` |
 | `GET` | `/v1/stores/:storeId` |
 | `GET` | `/v1/stores/:storeId/menu` |
-| `POST` | `/v1/stores/:storeId/sessions` |
 | `POST` | `/v1/stores/:storeId/orders` |
 | `GET` | `/v1/stores/:storeId/orders/:orderId` |
 | `POST` | `/v1/stores/:storeId/orders/:orderId/payments` |
@@ -558,3 +557,23 @@ premortem. Implemented in full.
   (EN 301 549, ADA), so this is not polish.
 - 11 new totem tests (33 total, 159 across the project). A build-only tsconfig
   keeps tests — which import the mock gateway — out of the production image.
+
+### 2026-09-17 — sessions removed, one open order per totem
+- **`sessionId` is gone**: the column, the index, the `POST /sessions` route,
+  the required body field and the client round trip. Nothing read it — no query
+  filtered or joined on it. Expiry runs off `orders.expires_at` and the totem
+  cancels its own order, so the session drove nothing while looking like a trust
+  boundary it never was.
+- **A totem may have one open order at a time.** Creating an order cancels that
+  screen's previous unpaid basket and returns its stock immediately, instead of
+  holding it for the whole TTL while the next customer is told "sold out". An
+  order in `confirmed` is refused with `payment_in_flight`: a payment may
+  already have charged the card, and only the payment path may release that
+  stock. This also bounds how much inventory one totem can hold.
+- The contention tests now give each competing customer **its own totem**, which
+  is what a real store looks like — the same screen starting a second order
+  deliberately closes its first. `registerTotems()` adds extra screens where a
+  test needs more concurrency than a store has.
+- 161 tests (128 API + 33 totem). Verified live: an abandoned basket is released
+  the moment the next order starts, a second screen is untouched, and a payment
+  in flight is protected.

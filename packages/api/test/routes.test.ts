@@ -25,11 +25,10 @@ afterAll(async () => {
 });
 
 const createOrder = async (items: { productId: string; quantity: number }[], storeBase = base, totemId: string = TOTEM.main) => {
-  const session = (await app.inject({ method: 'POST', url: `${storeBase}/sessions` })).json();
   return app.inject({
     method: 'POST',
     url: `${storeBase}/orders`,
-    payload: { sessionId: session.sessionId, totemId, items },
+    payload: { totemId, items },
   });
 };
 
@@ -129,13 +128,13 @@ describe('HTTP surface', () => {
 
   // Regression: the totem's fetch wrapper once set content-type on every request.
   it('accepts bodyless POSTs that still declare application/json', async () => {
+    const order = (await createOrder([{ productId: PRODUCT.chips, quantity: 1 }])).json();
     const res = await app.inject({
       method: 'POST',
-      url: `${base}/sessions`,
+      url: `${base}/orders/${order.id}/cancel`,
       headers: { 'content-type': 'application/json' },
     });
-    expect(res.statusCode).toBe(201);
-    expect(res.json()).toMatchObject({ storeId: STORE.main });
+    expect(res.statusCode).toBe(200);
   });
 
   it('rejects a malformed JSON body with a clean error code', async () => {

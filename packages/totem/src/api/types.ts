@@ -30,12 +30,6 @@ export interface Menu {
   items: Product[];
 }
 
-export interface Session {
-  sessionId: string;
-  storeId: string;
-  expiresAt: string;
-}
-
 export interface OrderLine {
   productId: string;
   name: string;
@@ -48,7 +42,6 @@ export interface Order {
   id: string;
   storeId: string;
   totemId: string;
-  sessionId: string;
   currency: string;
   status: 'pending' | 'confirmed' | 'paid' | 'failed' | 'cancelled' | 'expired';
   subtotalCents: number;

@@ -5,7 +5,6 @@ import type { PaymentMethod } from '../ports/payment-terminal.js';
 import { createOrderBody, createPaymentBody, storeOrderParams, storeParams } from './schemas.js';
 
 interface CreateOrderBody {
-  sessionId: string;
   totemId: string;
   items: { productId: string; quantity: number }[];
 }

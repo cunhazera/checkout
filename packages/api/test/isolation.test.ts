@@ -6,11 +6,12 @@ import {
   resetTransactionRetryCount,
 } from '../src/db/pool.js';
 import {
-  placeOrder,
-  STORE,
   PRODUCT,
+  STORE,
   assertStockInvariant,
   getStock,
+  placeOrder,
+  registerTotems,
   resetDatabase,
   setStock,
   setupDatabase,
@@ -87,10 +88,9 @@ describe('transaction isolation', () => {
   it('still never oversells under SERIALIZABLE', async () => {
     await setStock(PRODUCT.sandwich, 3);
 
+    const totems = await registerTotems(12);
     const results = await Promise.allSettled(
-      Array.from({ length: 12 }, () =>
-        placeOrder([{ productId: PRODUCT.sandwich, quantity: 1 }]),
-      ),
+      totems.map((totem) => placeOrder([{ productId: PRODUCT.sandwich, quantity: 1 }], { totem })),
     );
 
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(3);

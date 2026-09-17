@@ -28,6 +28,15 @@ export const storeNotFound = (storeId: string) =>
 export const totemNotFound = (totemId: string) =>
   new AppError(400, 'totem_not_found', 'Totem is not registered to this store', { totemId });
 
+/**
+ * The totem already has a payment in flight. Its stock must not be released:
+ * the card may well have been charged, and the resolver settles it either way.
+ */
+export const paymentInFlight = (orderId: string) =>
+  new AppError(409, 'payment_in_flight', 'A payment is already in progress on this totem', {
+    orderId,
+  });
+
 export const orderNotFound = (orderId: string) =>
   new AppError(404, 'order_not_found', 'Order not found', { orderId });
 

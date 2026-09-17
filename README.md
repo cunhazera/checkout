@@ -20,6 +20,9 @@ plus a confirm sheet that guards against mis-taps. Behind that:
 - **Stock is held, not just counted.** Adding to the basket reserves nothing;
   committing to pay reserves the units, and only a successful payment takes them
   off the shelf. Five totems in one shop can never sell the same last sandwich.
+- **One screen, one basket.** Starting an order closes that totem's previous
+  unpaid one, so a customer who walks away doesn't hold stock while the next
+  person is told it's sold out. A payment already in flight is never cancelled.
 - **Payments have three outcomes, not two:** paid, declined, and *we don't
   know*. The third is never guessed at — the order is held, the customer is
   given a reference, and the system keeps asking the gateway until it has an

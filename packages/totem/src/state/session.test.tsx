@@ -12,7 +12,6 @@ import type { Order, PayResult, Product, Store } from '../api/types';
 const api = vi.hoisted(() => ({
   getStore: vi.fn(),
   getMenu: vi.fn(),
-  startSession: vi.fn(),
   createOrder: vi.fn(),
   getOrder: vi.fn(),
   pay: vi.fn(),
@@ -52,7 +51,6 @@ const order = (over: Partial<Order> = {}): Order => ({
   id: 'order-1',
   storeId: STORE.id,
   totemId: 'totem-1',
-  sessionId: 'session-1',
   status: 'pending',
   currency: 'USD',
   subtotalCents: 480,
@@ -78,7 +76,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   api.getStore.mockResolvedValue(STORE);
   api.getMenu.mockResolvedValue(MENU);
-  api.startSession.mockResolvedValue({ sessionId: 'session-1', storeId: STORE.id, expiresAt: '' });
   api.cancel.mockResolvedValue({ status: 'cancelled' });
 });
 

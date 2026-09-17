@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import { pool } from '../src/db/pool.js';
 import { migrate } from '../src/db/migrate.js';
 import { seed } from '../src/db/seed.js';
@@ -53,12 +52,32 @@ export async function resetDatabase(): Promise<void> {
   invalidateStoreCache();
 }
 
-/** Creates an order the way a totem does: fresh session, a registered totem. */
+/**
+ * Creates an order the way a totem does. Defaults to a different totem per call
+ * is NOT the behaviour: the same totem is reused, which is what makes the
+ * one-open-order-per-totem rule visible in tests that place several orders.
+ */
 export function placeOrder(
   items: readonly RequestedLine[],
   { store = STORE.main, totem = TOTEM.main }: { store?: string; totem?: string } = {},
 ) {
-  return createOrder(store, { sessionId: randomUUID(), totemId: totem, items });
+  return createOrder(store, { totemId: totem, items });
+}
+
+/**
+ * Registers extra totems so a test can drive more simultaneous customers than
+ * a real store has screens. One totem is one customer: the contention tests
+ * need each competing order to come from a different one, because the same
+ * screen starting a second order deliberately closes its own first.
+ */
+export async function registerTotems(count: number, store: string = STORE.main): Promise<string[]> {
+  const { rows } = await pool.query<{ id: string }>(
+    `INSERT INTO totems (store_id, label)
+     SELECT $1, 'STRESS-' || g FROM generate_series(1, $2) g
+     RETURNING id`,
+    [store, count],
+  );
+  return rows.map((r) => r.id);
 }
 
 export async function setStock(

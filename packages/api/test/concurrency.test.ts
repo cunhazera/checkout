@@ -1,11 +1,12 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { closePool } from '../src/db/pool.js';
 import {
-  placeOrder,
-  STORE,
   PRODUCT,
+  STORE,
   assertStockInvariant,
   getStock,
+  placeOrder,
+  registerTotems,
   resetDatabase,
   setStock,
   setupDatabase,
@@ -22,8 +23,9 @@ afterAll(closePool);
 describe('concurrent stock reservation (ADR-004)', () => {
   it('never oversells the last unit', async () => {
     // `water` is seeded with quantity 1.
-    const attempts = Array.from({ length: 8 }, () =>
-      placeOrder([{ productId: PRODUCT.water, quantity: 1 }]),
+    const totems = await registerTotems(8);
+    const attempts = totems.map((totem) =>
+      placeOrder([{ productId: PRODUCT.water, quantity: 1 }], { totem }),
     );
     const results = await Promise.allSettled(attempts);
 
@@ -46,10 +48,9 @@ describe('concurrent stock reservation (ADR-004)', () => {
     await setStock(PRODUCT.sandwich, 5);
 
     // Ten carts each want 1; only 5 can succeed.
+    const totems = await registerTotems(10);
     const results = await Promise.allSettled(
-      Array.from({ length: 10 }, () =>
-        placeOrder([{ productId: PRODUCT.sandwich, quantity: 1 }]),
-      ),
+      totems.map((totem) => placeOrder([{ productId: PRODUCT.sandwich, quantity: 1 }], { totem })),
     );
 
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(5);
@@ -73,17 +74,24 @@ describe('concurrent stock reservation (ADR-004)', () => {
     //
     // Measured on this suite: ~250ms with sorted locks, ~8.4s without.
     const started = Date.now();
+    const totems = await registerTotems(12);
     const results = await Promise.allSettled(
-      Array.from({ length: 12 }, (_, i) =>
+      totems.map((totem, i) =>
         i % 2 === 0
-          ? placeOrder([
-              { productId: PRODUCT.chips, quantity: 1 },
-              { productId: PRODUCT.cola, quantity: 1 },
-            ])
-          : placeOrder([
-              { productId: PRODUCT.cola, quantity: 1 },
-              { productId: PRODUCT.chips, quantity: 1 },
-            ]),
+          ? placeOrder(
+              [
+                { productId: PRODUCT.chips, quantity: 1 },
+                { productId: PRODUCT.cola, quantity: 1 },
+              ],
+              { totem },
+            )
+          : placeOrder(
+              [
+                { productId: PRODUCT.cola, quantity: 1 },
+                { productId: PRODUCT.chips, quantity: 1 },
+              ],
+              { totem },
+            ),
       ),
     );
     const elapsed = Date.now() - started;

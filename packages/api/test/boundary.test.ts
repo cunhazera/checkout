@@ -24,7 +24,6 @@ const order = (body: unknown) =>
   app.inject({ method: 'POST', url: `${base}/orders`, payload: body as object });
 
 const valid = (items: unknown = [{ productId: PRODUCT.chips, quantity: 1 }]) => ({
-  sessionId: 's',
   totemId: TOTEM.main,
   items,
 });
@@ -85,12 +84,6 @@ describe('request schemas', () => {
     const res = await order(body);
     expect(res.statusCode).toBe(400);
     expect(res.json().error).toBe('validation_error');
-  });
-
-  it('rejects a sessionId longer than the column', async () => {
-    const res = await order({ ...valid(), sessionId: 'x'.repeat(256) });
-    expect(res.statusCode).toBe(400);
-    expect((await getStock(PRODUCT.chips)).reserved).toBe(0);
   });
 
   it('does not coerce a string quantity', async () => {

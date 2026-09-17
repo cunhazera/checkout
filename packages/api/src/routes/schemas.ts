@@ -28,11 +28,9 @@ export const storeOrderParams = {
 
 export const createOrderBody = {
   type: 'object',
-  required: ['sessionId', 'totemId', 'items'],
+  required: ['totemId', 'items'],
   additionalProperties: false,
   properties: {
-    // orders.session_id is VARCHAR(255); longer values failed in the INSERT.
-    sessionId: { type: 'string', minLength: 1, maxLength: 255 },
     totemId: uuid,
     items: {
       type: 'array',

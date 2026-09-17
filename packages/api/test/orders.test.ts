@@ -1,14 +1,16 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
-import { closePool } from '../src/db/pool.js';
-import { createOrder, cancelOrder, getOrder, startSession } from '../src/services/order.service.js';
+import { closePool, pool } from '../src/db/pool.js';
+import { cancelOrder, getOrder } from '../src/services/order.service.js';
 import { getMenu } from '../src/services/menu.service.js';
 import { AppError } from '../src/errors.js';
 import {
-  placeOrder,
-  STORE,
   PRODUCT,
+  STORE,
+  TOTEM,
   assertStockInvariant,
+  getOrderStatus,
   getStock,
+  placeOrder,
   resetDatabase,
   setStock,
   setupDatabase,
@@ -18,11 +20,54 @@ beforeAll(setupDatabase);
 beforeEach(resetDatabase);
 afterAll(closePool);
 
-describe('session', () => {
-  it('issues a session without writing to the database', () => {
-    const s = startSession(STORE.main);
-    expect(s.sessionId).toMatch(/^[0-9a-f-]{36}$/);
-    expect(new Date(s.expiresAt).getTime()).toBeGreaterThan(Date.now());
+describe('one open order per totem', () => {
+  it('cancels the basket a customer walked away from', async () => {
+    // Otherwise their reservation holds stock for the full TTL and the next
+    // person at that screen is told "sold out" for something on the shelf.
+    const abandoned = await placeOrder([{ productId: PRODUCT.chips, quantity: 3 }]);
+    expect((await getStock(PRODUCT.chips)).reserved).toBe(3);
+
+    const next = await placeOrder([{ productId: PRODUCT.cola, quantity: 1 }]);
+
+    expect(await getOrderStatus(abandoned.id)).toBe('cancelled');
+    expect((await getStock(PRODUCT.chips)).reserved).toBe(0);
+    expect(await getOrderStatus(next.id)).toBe('pending');
+    await assertStockInvariant();
+  });
+
+  it('leaves other totems alone', async () => {
+    const onT1 = await placeOrder([{ productId: PRODUCT.chips, quantity: 1 }], { totem: TOTEM.main });
+    await placeOrder([{ productId: PRODUCT.cola, quantity: 1 }], { totem: TOTEM.main2 });
+
+    // Five screens in a shop sell at the same time; only the same screen's
+    // previous basket is closed.
+    expect(await getOrderStatus(onT1.id)).toBe('pending');
+    expect((await getStock(PRODUCT.chips)).reserved).toBe(1);
+  });
+
+  it('refuses to start a new order while a payment is in flight', async () => {
+    const paying = await placeOrder([{ productId: PRODUCT.chips, quantity: 1 }]);
+    await pool.query(`UPDATE orders SET status = 'confirmed' WHERE store_id = $1 AND id = $2`, [
+      STORE.main,
+      paying.id,
+    ]);
+
+    // Cancelling this one could release stock for goods the customer has
+    // already been charged for.
+    await expect(placeOrder([{ productId: PRODUCT.cola, quantity: 1 }])).rejects.toMatchObject({
+      code: 'payment_in_flight',
+    });
+    expect((await getStock(PRODUCT.chips)).reserved).toBe(1);
+    expect((await getStock(PRODUCT.cola)).reserved).toBe(0);
+  });
+
+  it('lets the totem start again once the payment settled', async () => {
+    const first = await placeOrder([{ productId: PRODUCT.chips, quantity: 1 }]);
+    await cancelOrder(STORE.main, first.id);
+
+    const second = await placeOrder([{ productId: PRODUCT.cola, quantity: 1 }]);
+    expect(await getOrderStatus(second.id)).toBe('pending');
+    await assertStockInvariant();
   });
 });
 

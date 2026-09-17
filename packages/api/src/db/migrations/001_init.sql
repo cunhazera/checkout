@@ -102,7 +102,8 @@ CREATE TABLE stock (
     CHECK (quantity >= reserved)
 );
 
--- An anonymous checkout session (ADR-002: no users, no accounts).
+-- An order placed at a totem. Anonymous by design (ADR-002: no users, no
+-- accounts, no personal data) — the totem identifies the screen, never a person.
 --
 -- status: pending | confirmed | paid | failed | cancelled | expired
 --   'confirmed' means a payment is in flight. The order leaves 'pending' before
@@ -116,7 +117,6 @@ CREATE TABLE orders (
     store_id       UUID         NOT NULL REFERENCES stores(id),
     id             UUID         NOT NULL DEFAULT gen_random_uuid(),
     totem_id       UUID         NOT NULL,
-    session_id     VARCHAR(255) NOT NULL,           -- anonymous totem session
     status         VARCHAR(20)  NOT NULL DEFAULT 'pending',
     -- Snapshotted like the prices are: if a store ever changes currency, an old
     -- order must still read in the currency it was actually charged in.
@@ -126,7 +126,7 @@ CREATE TABLE orders (
     total_cents    BIGINT       NOT NULL,
     created_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     updated_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-    expires_at     TIMESTAMPTZ  NOT NULL,           -- session TTL
+    expires_at     TIMESTAMPTZ  NOT NULL,           -- when the basket gives its stock back
     PRIMARY KEY (store_id, id),
     -- An order can only come from a totem registered to the same store.
     FOREIGN KEY (store_id, totem_id) REFERENCES totems (store_id, id)
@@ -190,7 +190,10 @@ CREATE INDEX idx_products_store_active ON products (store_id, name) WHERE active
 
 CREATE INDEX idx_totems_store ON totems (store_id) WHERE active;
 
-CREATE INDEX idx_orders_store_session ON orders (store_id, session_id);
+-- A totem may have only one order open at a time, so creating one looks for
+-- the previous one. Partial: a store has a handful of open orders, never many.
+CREATE INDEX idx_orders_totem_open ON orders (store_id, totem_id)
+    WHERE status IN ('pending', 'confirmed');
 
 -- Serves both the live-order lookups and the per-store reconciliation probe.
 -- Partial keeps it to the handful of live orders rather than indexing a column

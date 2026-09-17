@@ -2,7 +2,6 @@ import type { FastifyInstance } from 'fastify';
 import { getStore, type Store } from '../services/store.service.js';
 import { storeInfoRoutes } from './store-info.js';
 import { menuRoutes } from './menu.js';
-import { sessionRoutes } from './sessions.js';
 import { orderRoutes } from './orders.js';
 
 declare module 'fastify' {
@@ -33,6 +32,5 @@ export async function storeScope(app: FastifyInstance): Promise<void> {
 
   await app.register(storeInfoRoutes);
   await app.register(menuRoutes);
-  await app.register(sessionRoutes);
   await app.register(orderRoutes);
 }

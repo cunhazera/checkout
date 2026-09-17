@@ -1,7 +1,6 @@
-import { randomUUID } from 'node:crypto';
 import { pool, withTransaction, type Db } from '../db/pool.js';
 import { config } from '../config.js';
-import { badRequest, orderNotFound, totemNotFound } from '../errors.js';
+import { badRequest, orderNotFound, paymentInFlight, totemNotFound } from '../errors.js';
 import { addCents, cents, multiplyCents, sumCents, taxOn, type Cents } from '../money.js';
 import { reserveStock, releaseReservations, type RequestedLine } from './stock.service.js';
 import { getStore } from './store.service.js';
@@ -20,7 +19,6 @@ export interface Order {
   id: string;
   storeId: string;
   totemId: string;
-  sessionId: string;
   status: OrderStatus;
   /** ISO 4217. Every *Cents field on this order is in this currency. */
   currency: string;
@@ -33,27 +31,8 @@ export interface Order {
 }
 
 export interface CreateOrderInput {
-  sessionId: string;
   totemId: string;
   items: readonly RequestedLine[];
-}
-
-export interface StartedSession {
-  sessionId: string;
-  storeId: string;
-  expiresAt: string;
-}
-
-/**
- * Arch doc: no database write here. The session materialises only when an order
- * is created — that is what keeps ADR-002's "no user entity" honest.
- */
-export function startSession(storeId: string): StartedSession {
-  return {
-    sessionId: randomUUID(),
-    storeId,
-    expiresAt: new Date(Date.now() + config.orderTtlMinutes * 60_000).toISOString(),
-  };
 }
 
 /**
@@ -62,10 +41,7 @@ export function startSession(storeId: string): StartedSession {
  * duplicate item ids cannot be expressed in JSON Schema.
  */
 function validateInput(input: CreateOrderInput): void {
-  if (typeof input?.sessionId !== 'string' || input.sessionId.length === 0) {
-    throw badRequest('sessionId is required');
-  }
-  if (typeof input.totemId !== 'string' || input.totemId.length === 0) {
+  if (typeof input?.totemId !== 'string' || input.totemId.length === 0) {
     throw badRequest('totemId is required');
   }
   const lines = input.items;
@@ -91,6 +67,42 @@ function validateInput(input: CreateOrderInput): void {
   }
 }
 
+/**
+ * A totem sells to one customer at a time, so it may have only one order open
+ * at a time.
+ *
+ * Without this, a customer who walks away mid-basket leaves stock reserved for
+ * the full TTL, and the next person at that same screen can be told "sold out"
+ * for something sitting on the shelf. It also stops one totem opening
+ * unlimited orders and holding a store's whole inventory.
+ *
+ * A 'confirmed' order is different: a payment is in flight and the card may
+ * already have been charged, so its stock must not be released by anyone but
+ * the payment path. That totem is refused a new order until it settles.
+ */
+async function closePreviousOrder(db: Db, storeId: string, totemId: string): Promise<void> {
+  const { rows } = await db.query<{ id: string; status: OrderStatus }>(
+    `SELECT id, status
+       FROM orders
+      WHERE store_id = $1
+        AND totem_id = $2
+        AND status IN ('pending', 'confirmed')
+        FOR UPDATE`,
+    [storeId, totemId],
+  );
+
+  for (const previous of rows) {
+    if (previous.status === 'confirmed') throw paymentInFlight(previous.id);
+
+    await releaseReservations(db, storeId, previous.id);
+    await db.query(
+      `UPDATE orders SET status = 'cancelled', updated_at = NOW()
+        WHERE store_id = $1 AND id = $2`,
+      [storeId, previous.id],
+    );
+  }
+}
+
 export async function createOrder(storeId: string, input: CreateOrderInput): Promise<Order> {
   validateInput(input);
   // Currency and tax rate belong to the store, not to global configuration.
@@ -105,6 +117,8 @@ export async function createOrder(storeId: string, input: CreateOrderInput): Pro
     );
     if (rowCount === 0) throw totemNotFound(input.totemId);
 
+    await closePreviousOrder(db, storeId, input.totemId);
+
     const priced = await reserveStock(db, storeId, input.items);
 
     const subtotal = sumCents(priced.map((p) => multiplyCents(p.unitPriceCents, p.quantity)));
@@ -117,14 +131,13 @@ export async function createOrder(storeId: string, input: CreateOrderInput): Pro
     if (total <= 0) throw badRequest('An order must cost something', { totalCents: total });
 
     const { rows } = await db.query<{ id: string; created_at: Date; expires_at: Date }>(
-      `INSERT INTO orders (store_id, totem_id, session_id, status, currency,
+      `INSERT INTO orders (store_id, totem_id, status, currency,
                            subtotal_cents, tax_cents, total_cents, expires_at)
-       VALUES ($1, $2, $3, 'pending', $4, $5, $6, $7, NOW() + ($8 || ' minutes')::interval)
+       VALUES ($1, $2, 'pending', $3, $4, $5, $6, NOW() + ($7 || ' minutes')::interval)
        RETURNING id, created_at, expires_at`,
       [
         storeId,
         input.totemId,
-        input.sessionId,
         store.currency,
         subtotal,
         tax,
@@ -146,7 +159,6 @@ export async function createOrder(storeId: string, input: CreateOrderInput): Pro
       id: created.id,
       storeId,
       totemId: input.totemId,
-      sessionId: input.sessionId,
       status: 'pending' as const,
       currency: store.currency,
       subtotalCents: subtotal,
@@ -180,7 +192,6 @@ export async function getOrder(
     id: string;
     store_id: string;
     totem_id: string;
-    session_id: string;
     status: OrderStatus;
     currency: string;
     subtotal_cents: number;
@@ -189,7 +200,7 @@ export async function getOrder(
     created_at: Date;
     expires_at: Date;
   }>(
-    `SELECT o.id, o.store_id, o.totem_id, o.session_id, o.status, o.currency,
+    `SELECT o.id, o.store_id, o.totem_id, o.status, o.currency,
             o.subtotal_cents, o.tax_cents, o.total_cents, o.created_at, o.expires_at
        FROM orders o
       WHERE o.store_id = $1 AND o.id = $2`,
@@ -216,7 +227,6 @@ export async function getOrder(
     id: row.id,
     storeId: row.store_id,
     totemId: row.totem_id,
-    sessionId: row.session_id,
     status: row.status,
     currency: row.currency,
     subtotalCents: cents(row.subtotal_cents),

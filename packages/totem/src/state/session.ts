@@ -30,7 +30,6 @@ export function useSession() {
    */
   const [serviceDown, setServiceDown] = useState(false);
 
-  const [sessionId, setSessionId] = useState<string | null>(null);
   const [cart, setCart] = useState<Record<string, number>>({});
   const [status, setStatus] = useState('');
 
@@ -140,7 +139,6 @@ export function useSession() {
     setPendingId(null);
     setPendingQty(1);
     setStatus('');
-    setSessionId(null);
     setIdlePrompt(false);
     setScreen('welcome');
     void refreshMenu();
@@ -156,17 +154,21 @@ export function useSession() {
     reset();
   }, [order, reset]);
 
+  /**
+   * No session to open: an order is created when the customer commits to pay,
+   * and the totem itself is the identity the server cares about. This only
+   * proves the API is reachable before showing a menu the customer cannot buy
+   * from.
+   */
   const start = useCallback(async () => {
     try {
-      const session = await api.startSession();
-      setSessionId(session.sessionId);
+      await api.getMenu().then(setMenu);
       setScreen('shop');
-      void refreshMenu();
     } catch (err) {
       if (err instanceof ApiError && err.code === 'network_error') setServiceDown(true);
       else setMenuError(t('cannotStart'));
     }
-  }, [refreshMenu]);
+  }, []);
 
   // --- cart ----------------------------------------------------------------
 
@@ -215,12 +217,11 @@ export function useSession() {
    * "just sold out and was removed from your order".
    */
   const goToPay = useCallback(async () => {
-    if (!sessionId || lines.length === 0) return;
+    if (lines.length === 0) return;
     setBusy(true);
     setFailureMessage(null);
     try {
       const created = await api.createOrder(
-        sessionId,
         lines.map((l) => ({ productId: l.product.id, quantity: l.quantity })),
       );
       setOrder(created);
@@ -239,7 +240,7 @@ export function useSession() {
     } finally {
       setBusy(false);
     }
-  }, [sessionId, lines, setQuantity, refreshMenu]);
+  }, [lines, setQuantity, refreshMenu]);
 
   const pay = useCallback(async () => {
     if (!order || !method) return;

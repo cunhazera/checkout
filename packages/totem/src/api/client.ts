@@ -1,5 +1,5 @@
 import { getIdentity } from '../identity';
-import type { Menu, Order, PayResult, PaymentMethod, Session, Store } from './types';
+import type { Menu, Order, PayResult, PaymentMethod, Store } from './types';
 
 /** Every call is scoped to the store this device belongs to. */
 const base = () => `/api/v1/stores/${getIdentity().storeId}`;
@@ -67,12 +67,10 @@ export const api = {
 
   getMenu: () => request<Menu>('/menu').then((r) => r.items),
 
-  startSession: () => request<Session>('/sessions', { method: 'POST' }),
-
-  createOrder: (sessionId: string, items: { productId: string; quantity: number }[]) =>
+  createOrder: (items: { productId: string; quantity: number }[]) =>
     request<Order>('/orders', {
       method: 'POST',
-      body: JSON.stringify({ sessionId, totemId: getIdentity().totemId, items }),
+      body: JSON.stringify({ totemId: getIdentity().totemId, items }),
     }),
 
   getOrder: (orderId: string) => request<Order>(`/orders/${orderId}`),
