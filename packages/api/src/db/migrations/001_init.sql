@@ -34,7 +34,11 @@ CREATE TABLE stores (
     timezone         VARCHAR(64)  NOT NULL,         -- IANA, e.g. 'America/Sao_Paulo'
     currency         CHAR(3)      NOT NULL,         -- ISO 4217; all *_cents here are in this currency
     locale           VARCHAR(16)  NOT NULL,         -- BCP 47, e.g. 'pt-BR'
-    tax_basis_points INT          NOT NULL DEFAULT 0 CHECK (tax_basis_points >= 0),
+    -- No default on purpose: stores get opened by copying the last INSERT, and a
+    -- silent 0 produces months of orders with tax_cents = 0 that surface at
+    -- quarter close. Zero is a legitimate choice (tax-inclusive pricing) but it
+    -- has to be chosen.
+    tax_basis_points INT          NOT NULL CHECK (tax_basis_points >= 0),
     active           BOOLEAN      NOT NULL DEFAULT true,
     created_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     updated_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW()
