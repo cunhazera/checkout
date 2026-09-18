@@ -115,6 +115,34 @@ assume failure.
 
 Full scenario list and what each should do: **[PAYMENT_TESTING.md](PAYMENT_TESTING.md)**.
 
+## The API
+
+Everything a store owns lives under `/v1/stores/:storeId`. The store id is the
+partition key, so no endpoint ever spans two stores and sharding stays open.
+
+| Method | Path | What it does |
+|---|---|---|
+| `GET` | `/health` | Process and database liveness, with pool stats |
+| `GET` | `/v1/stores/:storeId` | Store settings: currency, locale, tax rate |
+| `GET` | `/v1/stores/:storeId/menu` | Products with live availability |
+| `POST` | `/v1/stores/:storeId/orders` | Create an order and **reserve** the stock |
+| `GET` | `/v1/stores/:storeId/orders/:orderId` | Read one order |
+| `POST` | `/v1/stores/:storeId/orders/:orderId/payments` | Attempt payment |
+| `POST` | `/v1/stores/:storeId/orders/:orderId/cancel` | Release the reservation |
+| `GET` | `/v1/stores/:storeId/health/stock` | Stock invariant check |
+| `GET` | `/v1/stores/:storeId/health/orders` | Payments that need a human |
+
+Two things about this shape are worth knowing before reading it as ordinary CRUD.
+**Payment answers `201` whatever the outcome** — the attempt really was created,
+and `status` says whether the money moved (`succeeded`, `failed`, or `unknown`,
+which is never guessed at). And **`cancel` is a verb on purpose**: orders are
+financial records that are never deleted, so `DELETE` would misdescribe it.
+
+The mock gateway adds `/charges`, `/charges/:key` and a `/control/*` surface for
+choosing how it misbehaves. Development only.
+
+**Every endpoint with a runnable `curl`: [API.md](API.md).**
+
 ## Running it in containers
 
 ```bash
@@ -212,6 +240,7 @@ sold out, so the interesting paths are reachable immediately.
 
 | Document | What's in it |
 |---|---|
+| [API.md](API.md) | Every endpoint, with `curl` commands to exercise each one |
 | [snackbar_checkout_architecture.md](snackbar_checkout_architecture.md) | The original architecture reference and its ADRs |
 | [DISTRIBUTED_ARCHITECTURE.md](DISTRIBUTED_ARCHITECTURE.md) | Going from one shop to thousands: data model, API, and the phased plan |
 | [PAYMENT_TESTING.md](PAYMENT_TESTING.md) | Every payment failure and how to reproduce it |
