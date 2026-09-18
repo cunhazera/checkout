@@ -7,18 +7,26 @@
     "packages/totem"
   ],
   "scripts": {
+    "predev": "node scripts/check-node.mjs",
     "dev": "trap 'kill 0' EXIT; npm run dev:gateway & npm run dev:api & npm run dev:totem",
     "dev:api": "npm run dev --workspace @checkout/api",
     "dev:totem": "npm run dev --workspace @checkout/totem",
+    "premigrate": "node scripts/check-node.mjs",
     "migrate": "npm run migrate --workspace @checkout/api",
+    "preseed": "node scripts/check-node.mjs",
     "seed": "npm run seed --workspace @checkout/api",
+    "pretest": "node scripts/check-node.mjs",
     "test": "npm run test:api && npm run test:totem",
     "typecheck": "npm run typecheck --workspace @checkout/api && npm run typecheck --workspace @checkout/gateway && npm run typecheck --workspace @checkout/totem",
     "build": "npm run build --workspace @checkout/totem",
     "dev:gateway": "npm run dev --workspace @checkout/gateway",
     "scenario": "node scripts/scenario.mjs",
+    "predev:gateway-payments": "node scripts/check-node.mjs",
     "dev:gateway-payments": "trap 'kill 0' EXIT; npm run dev:gateway & PAYMENT_DRIVER=http npm run dev:api & npm run dev:totem",
     "test:api": "npm test --workspace @checkout/api",
     "test:totem": "npm test --workspace @checkout/totem"
+  },
+  "engines": {
+    "node": ">=22.9"
   }
 }

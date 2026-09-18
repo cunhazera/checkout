@@ -143,6 +143,32 @@ describe('when the totem cannot reach the API', () => {
     await waitFor(() => expect(result.current.menuError).toBe('boom'));
     expect(result.current.serviceDown).toBe(false);
   });
+
+  it('goes out of service when a proxy answers for a dead API', async () => {
+    // The bug this guards, found by pointing the totem at a dead API: the
+    // request never throws, because Vite (dev) and nginx (production) answer on
+    // the API's behalf with a 5xx and no JSON body. The totem stayed on the
+    // welcome screen and ate every tap, showing the customer nothing at all.
+    const proxied = new ApiError(502, 'unknown_error', 'Something went wrong');
+    api.getStore.mockRejectedValue(proxied);
+    api.getMenu.mockRejectedValue(proxied);
+
+    const { result } = renderHook(() => useSession());
+
+    await waitFor(() => expect(result.current.serviceDown).toBe(true));
+  });
+
+  it('stays up when the API itself is merely busy', async () => {
+    // 503 database_busy is a real answer from a reachable API: transient, and
+    // the customer should be able to try again rather than meet a dead screen.
+    api.getMenu.mockRejectedValue(
+      new ApiError(503, 'database_busy', 'The checkout is busy, please try again'),
+    );
+    const { result } = renderHook(() => useSession());
+
+    await waitFor(() => expect(result.current.menuError).toBeTruthy());
+    expect(result.current.serviceDown).toBe(false);
+  });
 });
 
 describe('the basket', () => {

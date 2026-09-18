@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, ApiError } from '../api/client';
+import { api, ApiError, isUnreachable } from '../api/client';
 import type { Order, PaymentMethod, Product, Store } from '../api/types';
 import { configureMoney, estimateTax } from '../money';
 import { configureLanguage, t } from '../i18n';
@@ -70,7 +70,7 @@ export function useSession() {
       .catch((err) => {
         // Without the store there is no currency, tax or language: better to
         // say so than to render a screen in the wrong money.
-        if (err instanceof ApiError && err.code === 'network_error') setServiceDown(true);
+        if (isUnreachable(err)) setServiceDown(true);
       });
     void refreshMenu();
   }, [refreshMenu]);
@@ -165,7 +165,7 @@ export function useSession() {
       await api.getMenu().then(setMenu);
       setScreen('shop');
     } catch (err) {
-      if (err instanceof ApiError && err.code === 'network_error') setServiceDown(true);
+      if (isUnreachable(err)) setServiceDown(true);
       else setMenuError(t('cannotStart'));
     }
   }, []);

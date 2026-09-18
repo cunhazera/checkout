@@ -27,6 +27,26 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Is this "the checkout service is not answering", rather than "it answered and
+ * said no"?
+ *
+ * Two shapes mean the same thing to a customer. `fetch` throwing is the obvious
+ * one. The other is a proxy answering on the API's behalf: in development Vite
+ * turns a refused connection into a 500, and in production nginx sits in front
+ * of the API container and returns 502 or 504 while it is down or restarting.
+ * Those never reach `fetch`'s catch, so a totem that only watched for a thrown
+ * request stayed on the welcome screen and silently swallowed every tap.
+ *
+ * The distinguishing mark is that the API was not the one replying, so there is
+ * no machine-readable `code` in the body. A real API fault (`internal_error`,
+ * `database_busy`) does carry one and must NOT take the totem out of service —
+ * those are transient and the customer should be able to retry.
+ */
+export const isUnreachable = (err: unknown): boolean =>
+  err instanceof ApiError &&
+  (err.code === 'network_error' || (err.status >= 500 && err.code === 'unknown_error'));
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {

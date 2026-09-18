@@ -82,7 +82,7 @@ panel and scales to fit, so a tall narrow window looks like the real thing.
 |---|---|
 | `npm run dev` | Everything, with the in-process fake payment terminal |
 | `npm run dev:gateway-payments` | Everything, with payments going over HTTP to the mock gateway |
-| `npm test` | All 161 tests (API + totem) |
+| `npm test` | All 163 tests (API + totem) |
 | `npm run typecheck` | All three packages |
 | `npm run build` | Production build of the totem |
 | `npm run seed` | Reset the demo data |
@@ -186,7 +186,7 @@ valid file shows an out-of-service screen rather than guessing a store.
 ```bash
 npm test              # everything
 npm run test:api      # 128 tests, needs Postgres running
-npm run test:totem    # 33 tests, no database needed
+npm run test:totem    # 35 tests, no database needed
 ```
 
 The API tests run against a **real Postgres**, not a mock, because the things
@@ -267,16 +267,23 @@ sold out, so the interesting paths are reachable immediately.
 
 ## Troubleshooting
 
-**"Cannot reach the checkout service" on the totem.** The API is not running,
-or it is on a different port from the one the totem proxies to
-(`packages/totem/vite.config.ts`).
+**The totem shows "Out of service".** It cannot reach the API: either the API is
+not running, or it is on a different port from the one the totem proxies to
+(`packages/totem/vite.config.ts`). Start the API and the screen recovers on its
+own within about five seconds — no need to reload it.
 
 **`Port 3210 is already in use`.** Something else has it: `PORT=3299 npm run
 dev:api`, and point the totem at it with `VITE_API_TARGET`.
 
-**The container exits on start.** Postgres 18 stores data at
-`/var/lib/postgresql`, not `/data`. If you changed the compose file, that is
-usually why.
+**The database container exits immediately.** Postgres 18 changed where the
+volume goes: it wants a single mount at `/var/lib/postgresql`, not at
+`/var/lib/postgresql/data` the way every pre-18 compose file does it. Copying an
+older file in gives `Exited (1)` and this in `docker compose logs db`:
+
+```
+The suggested container configuration for 18+ is to place a single mount
+at /var/lib/postgresql which will then place PostgreSQL data in a subdirectory
+```
 
 **Tests fail with connection errors.** `docker compose up -d`, then
 `npm run migrate`. The tests re-seed the database as they run, so a `npm test`
