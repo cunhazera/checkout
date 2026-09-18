@@ -151,6 +151,17 @@ docker compose -f docker-compose.prod.yml exec api node packages/api/dist/db/mig
 docker compose -f docker-compose.prod.yml exec api node packages/api/dist/db/seed.js
 ```
 
+**This replaces the development database container.** Both compose files define a
+`db` service in the same project, so the second one to start takes the container
+over — pointing it at the production volume and dropping the `5433` binding the
+development setup uses. Your development data is still in its own volume, but
+`npm run dev` and `npm test` will fail to connect until you switch back:
+
+```bash
+docker compose -f docker-compose.prod.yml down
+docker compose up -d
+```
+
 The totem is then on <http://127.0.0.1:8080>, served by nginx, which also
 proxies `/api` to the API container so the browser sees one origin.
 
@@ -214,10 +225,17 @@ Store ids are `a0000000-…-000000000001` and `…002`. To run the totem as the
 Brazilian store — Portuguese copy, BRL prices, a smaller product range:
 
 ```bash
+# Stop `npm run dev` first: this needs port 5180, which it is holding.
+# Then keep the API and gateway up, since this starts only the UI:
+npm run dev:api & npm run dev:gateway &
+
 VITE_STORE_ID=a0000000-0000-4000-8000-000000000002 \
 VITE_TOTEM_ID=b0000000-0000-4000-8000-000000000011 \
 npm run dev:totem
 ```
+
+These two variables are a development shortcut and are ignored in a production
+build, where the device reads its identity from `/totem.json` instead.
 
 Stock is seeded deliberately uneven: one item has a single unit left and one is
 sold out, so the interesting paths are reachable immediately.
@@ -262,7 +280,9 @@ usually why.
 
 **Tests fail with connection errors.** `docker compose up -d`, then
 `npm run migrate`. The tests re-seed the database as they run, so a `npm test`
-will reset whatever demo data you were looking at.
+will reset whatever demo data you were looking at. If you ran the container
+stack above, it took the `db` container over — `docker compose -f
+docker-compose.prod.yml down && docker compose up -d` puts it back.
 
 ## Not built yet
 

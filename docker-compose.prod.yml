@@ -1,7 +1,12 @@
 # The whole system in containers: database, API, totem, and the mock gateway.
 #
 #   docker compose -f docker-compose.prod.yml up --build -d
-#   docker compose -f docker-compose.prod.yml run --rm api node packages/api/dist/db/migrate.js
+#   docker compose -f docker-compose.prod.yml exec api node packages/api/dist/db/migrate.js
+#   docker compose -f docker-compose.prod.yml exec api node packages/api/dist/db/seed.js
+#
+# Note that this defines a `db` service in the same project as docker-compose.yml,
+# so starting this stack takes that container over and the development setup
+# loses its 5433 binding until you bring this one down.
 #
 # Not a production deployment: there is no TLS, no secret management and no
 # backups. It is the missing step between "the tests pass" and "it runs
